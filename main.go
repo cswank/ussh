@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/gizak/termui"
 
@@ -54,23 +56,17 @@ func main() {
 
 func login(host string) {
 
-	key, err := ioutil.ReadFile(fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME")))
+	conn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 	if err != nil {
-		log.Fatalf("unable to read private key: %v", err)
+		log.Fatal(err)
 	}
-
-	// Create the Signer for this private key.
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		log.Fatalf("unable to parse private key: %v", err)
-	}
+	defer conn.Close()
+	ag := agent.NewClient(conn)
+	auths := []ssh.AuthMethod{ssh.PublicKeysCallback(ag.Signers)}
 
 	config := &ssh.ClientConfig{
 		User: username,
-		Auth: []ssh.AuthMethod{
-			// Use the PublicKeys method for remote authentication.
-			ssh.PublicKeys(signer),
-		},
+		Auth: auths,
 	}
 
 	// Connect to the remote server and perform the SSH handshake.
@@ -87,13 +83,45 @@ func login(host string) {
 	defer session.Close()
 
 	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
 	session.Stdin = os.Stdin
 
-	if err := session.Shell(); err != nil {
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,     // enable echoing
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	}
+
+	fileDescriptor := int(os.Stdin.Fd())
+
+	if terminal.IsTerminal(fileDescriptor) {
+		originalState, err := terminal.MakeRaw(fileDescriptor)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer terminal.Restore(fileDescriptor, originalState)
+
+		termWidth, termHeight, err := terminal.GetSize(fileDescriptor)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = session.RequestPty("xterm-256color", termHeight, termWidth, modes)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	err = session.Shell()
+	if err != nil {
 		log.Fatal(err)
 	}
 
+	// You should now be connected via SSH with a fully-interactive terminal
+	// This call blocks until the user exits the session (e.g. via CTRL + D)
+	session.Wait()
 }
+
 func getRows(body io.Reader) []string {
 	var r resp
 	dec := json.NewDecoder(body)
