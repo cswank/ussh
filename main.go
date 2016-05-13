@@ -20,8 +20,6 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-//import "github.com/gizak/termui"
-
 var (
 	query    = kingpin.Arg("query", "search string").String()
 	addr     = os.Getenv("UPTIME_ADDR")
@@ -49,77 +47,10 @@ func main() {
 	defer r.Body.Close()
 	rows := getRows(r.Body)
 	s := showResults(rows)
-
 	parts := strings.Split(s, " ")
-	login(parts[1])
-}
-
-func login(host string) {
-
-	conn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
-	if err != nil {
-		log.Fatal(err)
+	if len(parts) == 2 {
+		login(parts[1])
 	}
-	defer conn.Close()
-	ag := agent.NewClient(conn)
-	auths := []ssh.AuthMethod{ssh.PublicKeysCallback(ag.Signers)}
-
-	config := &ssh.ClientConfig{
-		User: username,
-		Auth: auths,
-	}
-
-	// Connect to the remote server and perform the SSH handshake.
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", host), config)
-	if err != nil {
-		log.Fatalf("unable to connect: %v", err)
-	}
-	defer client.Close()
-
-	session, err := client.NewSession()
-	if err != nil {
-		panic("Failed to create session: " + err.Error())
-	}
-	defer session.Close()
-
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
-	session.Stdin = os.Stdin
-
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          1,     // enable echoing
-		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	}
-
-	fileDescriptor := int(os.Stdin.Fd())
-
-	if terminal.IsTerminal(fileDescriptor) {
-		originalState, err := terminal.MakeRaw(fileDescriptor)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer terminal.Restore(fileDescriptor, originalState)
-
-		termWidth, termHeight, err := terminal.GetSize(fileDescriptor)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = session.RequestPty("xterm-256color", termHeight, termWidth, modes)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	err = session.Shell()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// You should now be connected via SSH with a fully-interactive terminal
-	// This call blocks until the user exits the session (e.g. via CTRL + D)
-	session.Wait()
 }
 
 func getRows(body io.Reader) []string {
@@ -187,4 +118,70 @@ func getIndex(d interface{}) (int64, error) {
 	k := strings.Replace(fmt.Sprintf("%s", d), "{", "", -1)
 	k = strings.Replace(k, "}", "", -1)
 	return strconv.ParseInt(k, 10, 64)
+}
+
+func login(host string) {
+
+	conn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+	ag := agent.NewClient(conn)
+	auths := []ssh.AuthMethod{ssh.PublicKeysCallback(ag.Signers)}
+
+	config := &ssh.ClientConfig{
+		User: username,
+		Auth: auths,
+	}
+
+	// Connect to the remote server and perform the SSH handshake.
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", host), config)
+	if err != nil {
+		log.Fatalf("unable to connect: %v", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		panic("Failed to create session: " + err.Error())
+	}
+	defer session.Close()
+
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+	session.Stdin = os.Stdin
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,     // enable echoing
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	}
+
+	fileDescriptor := int(os.Stdin.Fd())
+
+	if terminal.IsTerminal(fileDescriptor) {
+		originalState, err := terminal.MakeRaw(fileDescriptor)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer terminal.Restore(fileDescriptor, originalState)
+
+		termWidth, termHeight, err := terminal.GetSize(fileDescriptor)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = session.RequestPty("xterm-256color", termHeight, termWidth, modes)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	err = session.Shell()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	session.Wait()
 }
