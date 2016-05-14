@@ -204,7 +204,7 @@ func getLists(rows []string, searchText []string) (*ui.List, *ui.List, *ui.List)
 	s.BorderLabel = "ssh to"
 	s.Height = 3
 	s.Width = width + 4
-	s.Y = len(rows) + 6
+	s.Y = len(rows) + 5
 
 	return ls, f, s
 }
