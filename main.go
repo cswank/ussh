@@ -76,15 +76,16 @@ func showResults(rows []string) string {
 	defer ui.Close()
 
 	searchText := []string{""}
-	ls, f := getLists(rows, searchText)
+	ls, f, t := getLists(rows, searchText)
 
-	ui.Render(ls, f)
+	ui.Render(ls, f, t)
 
 	var result string
 	var searchMode, confirmMode bool
 	var indexStr string
 
 	ui.Handle("/sys/kbd/C-d", func(ui.Event) {
+		result = ""
 		ui.StopLoop()
 	})
 
@@ -123,25 +124,38 @@ func showResults(rows []string) string {
 			} else {
 				result = ""
 				ui.Clear()
-				ui.Render(ls, f)
+				ui.Render(ls, f, t)
 			}
 		} else {
+			defer func() {
+				if !confirmMode {
+					j, err := strconv.ParseInt(indexStr, 10, 64)
+					if err != nil {
+						//alert
+						return
+					}
+					i := int(j)
+					if i <= len(rows) && i > 0 {
+						result = rows[i-1]
+						parts := strings.Split(result, " ")
+						t.Items = []string{parts[1]}
+						ui.Render(ls, f, t)
+					}
+				}
+			}()
 			s := getString(e.Data)
 			if s == "<enter>" {
-				j, err := strconv.ParseInt(indexStr, 10, 64)
-				if err != nil {
-					//alert
-					return
+				confirmMode = true
+				c := getConfrm(result)
+				indexStr = ""
+				ui.Clear()
+				ui.Render(c)
+			} else if s == "C-8" {
+				end := len(indexStr) - 1
+				if end < 0 {
+					end = 0
 				}
-				i := int(j)
-				if i <= len(rows) && i > 0 {
-					result = rows[i-1]
-					confirmMode = true
-					c := getConfrm(result)
-					indexStr = ""
-					ui.Clear()
-					ui.Render(c)
-				}
+				indexStr = indexStr[0:end]
 			} else {
 				indexStr += getString(e.Data)
 			}
@@ -165,13 +179,13 @@ func getConfrm(result string) *ui.List {
 	return c
 }
 
-func getLists(rows []string, searchText []string) (*ui.List, *ui.List) {
+func getLists(rows []string, searchText []string) (*ui.List, *ui.List, *ui.List) {
 	width := getWidth(rows)
 
 	ls := ui.NewList()
 	ls.Items = rows
 	ls.ItemFgColor = ui.ColorYellow
-	ls.BorderLabel = "Results (C-d to exit)"
+	ls.BorderLabel = "sesults (C-d to exit)"
 	ls.Height = len(rows) + 2
 	ls.Width = width + 4
 	ls.Y = 0
@@ -179,11 +193,20 @@ func getLists(rows []string, searchText []string) (*ui.List, *ui.List) {
 	f := ui.NewList()
 	f.Items = searchText
 	f.ItemFgColor = ui.ColorRed
-	f.BorderLabel = "Filter (C-f)"
+	f.BorderLabel = "filter (C-f)"
 	f.Height = 3
 	f.Width = width + 4
 	f.Y = len(rows) + 2
-	return ls, f
+
+	s := ui.NewList()
+	s.Items = searchText
+	s.ItemFgColor = ui.ColorGreen
+	s.BorderLabel = "ssh to"
+	s.Height = 3
+	s.Width = width + 4
+	s.Y = len(rows) + 6
+
+	return ls, f, s
 }
 
 func filter(rows []string, sep string) []string {
