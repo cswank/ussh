@@ -21,11 +21,30 @@ import (
 )
 
 var (
-	query    = kingpin.Arg("query", "search string").String()
-	addr     = os.Getenv("UPTIME_ADDR")
-	username = os.Getenv("UPTIME_USER")
-	key      = os.Getenv("UPTIME_KEY")
+	query     = kingpin.Arg("query", "search string").String()
+	addr      = os.Getenv("UPTIME_ADDR")
+	username  = os.Getenv("UPTIME_USER")
+	key       = os.Getenv("UPTIME_KEY")
+	userTheme theme
+	themes    = map[string]theme{
+		"light": {
+			list:   ui.ColorBlack,
+			filter: ui.ColorBlack,
+			ssh:    ui.ColorBlack,
+		},
+		"dark": {
+			list:   ui.ColorYellow,
+			filter: ui.ColorGreen,
+			ssh:    ui.ColorGreen,
+		},
+	}
 )
+
+type theme struct {
+	list   ui.Attribute
+	filter ui.Attribute
+	ssh    ui.Attribute
+}
 
 type result struct {
 	Host string `json:"fqdn"`
@@ -34,6 +53,14 @@ type result struct {
 type resp struct {
 	Message string   `json:"message"`
 	Results []result `json:"results"`
+}
+
+func init() {
+	var ok bool
+	userTheme, ok = themes[os.Getenv("UPTIME_THEME")]
+	if !ok {
+		userTheme = themes["dark"]
+	}
 }
 
 func main() {
@@ -53,6 +80,13 @@ func main() {
 	}
 }
 
+func getOffset(i int) int {
+	if i < 10 {
+		return 5
+	}
+	return 6
+}
+
 func getRows(body io.Reader) []string {
 	var r resp
 	dec := json.NewDecoder(body)
@@ -61,7 +95,8 @@ func getRows(body io.Reader) []string {
 	}
 	rows := make([]string, len(r.Results))
 	for i, x := range r.Results {
-		rows[i] = fmt.Sprintf("[%d] %s", i+1, x.Host)
+		t := fmt.Sprintf("[%%d] %-%%ds", getOffset(i))
+		rows[i] = fmt.Sprintf(t, i+1, x.Host)
 	}
 	return rows
 }
@@ -128,19 +163,25 @@ func showResults(rows []string) string {
 			}
 		} else {
 			defer func() {
-				if !confirmMode {
+				if !confirmMode && indexStr != "" {
 					j, err := strconv.ParseInt(indexStr, 10, 64)
 					if err != nil {
-						//alert
-						return
+						j = -1
 					}
 					i := int(j)
 					if i <= len(rows) && i > 0 {
+						t.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", indexStr)
 						result = rows[i-1]
 						parts := strings.Split(result, " ")
 						t.Items = []string{parts[1]}
-						ui.Render(ls, f, t)
+
 					}
+				} else {
+					t.BorderLabel = "ssh to (enter number)"
+					t.Items = []string{""}
+				}
+				if !confirmMode {
+					ui.Render(ls, f, t)
 				}
 			}()
 			s := getString(e.Data)
@@ -151,11 +192,7 @@ func showResults(rows []string) string {
 				ui.Clear()
 				ui.Render(c)
 			} else if s == "C-8" {
-				end := len(indexStr) - 1
-				if end < 0 {
-					end = 0
-				}
-				indexStr = indexStr[0:end]
+				indexStr = ""
 			} else {
 				indexStr += getString(e.Data)
 			}
@@ -184,7 +221,7 @@ func getLists(rows []string, searchText []string) (*ui.List, *ui.List, *ui.List)
 
 	ls := ui.NewList()
 	ls.Items = rows
-	ls.ItemFgColor = ui.ColorYellow
+	ls.ItemFgColor = userTheme.list
 	ls.BorderLabel = "sesults (C-d to exit)"
 	ls.Height = len(rows) + 2
 	ls.Width = width + 4
@@ -192,7 +229,7 @@ func getLists(rows []string, searchText []string) (*ui.List, *ui.List, *ui.List)
 
 	f := ui.NewList()
 	f.Items = searchText
-	f.ItemFgColor = ui.ColorRed
+	f.ItemFgColor = userTheme.filter
 	f.BorderLabel = "filter (C-f)"
 	f.Height = 3
 	f.Width = width + 4
@@ -200,8 +237,8 @@ func getLists(rows []string, searchText []string) (*ui.List, *ui.List, *ui.List)
 
 	s := ui.NewList()
 	s.Items = searchText
-	s.ItemFgColor = ui.ColorGreen
-	s.BorderLabel = "ssh to"
+	s.ItemFgColor = userTheme.ssh
+	s.BorderLabel = "ssh to (enter number)"
 	s.Height = 3
 	s.Width = width + 4
 	s.Y = len(rows) + 5
