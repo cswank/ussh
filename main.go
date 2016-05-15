@@ -99,9 +99,8 @@ func main() {
 	defer r.Body.Close()
 	rows := getRows(r.Body)
 	s := showResults(rows)
-	parts := strings.Split(s, " ")
-	if len(parts) == 2 {
-		login(parts[1])
+	if s != "" {
+		login(s)
 	}
 }
 
@@ -116,7 +115,6 @@ func getRows(body io.Reader) []string {
 	for i, x := range r.Results {
 		rows[i] = x.Host
 	}
-	fmt.Println(rows)
 	return rows
 }
 
@@ -129,7 +127,7 @@ func showResults(rows []string) string {
 
 	ls, f, t := getLists(rows)
 
-	ui.Render(ls.list, f.list, t.list)
+	ui.Render(showNumbers(ls), f.list, t.list)
 
 	ui.Handle("/sys/kbd/C-d", func(ui.Event) {
 		t.target = ""
@@ -147,61 +145,44 @@ func showResults(rows []string) string {
 		switch mode {
 		case modeSearch:
 			f.filter(s, ls)
-		case modeConfirm:
-			if s == "y" {
-				ui.StopLoop()
-				return
-			}
-			mode = modeDefault
-			t.target = ""
-			ui.Clear()
-			ui.Render(ls.list, f.list, t.list)
+			ui.Render(showNumbers(ls), f.list, t.list)
 		default:
-			t.getResult(s)
-			ui.Render(ls.list, f.list, t.list)
+			if t.getResult(s, ls, f) {
+				ui.StopLoop()
+			}
 		}
 	})
+
 	ui.Loop()
 	return t.target
 }
 
-func (s *sshList) getResult(in string) {
+func (s *sshList) getResult(in string, l *resultList, f *filterList) bool {
 	switch in {
 	case "<enter>":
-		s.showConfirm()
+		return true
 	case "C-8":
 		s.index = ""
 		s.target = ""
 		s.list.BorderLabel = "ssh to (enter number)"
 		s.list.Items = []string{""}
+		ui.Render(showNumbers(l), f.list, s.list)
 	default:
 		s.index += getString(in)
 		j, err := strconv.ParseInt(s.index, 10, 64)
 		if err != nil {
-			return
+			return false
 		}
-		i := int(j)
-		if !(i <= len(s.rows) || i > 0) {
-			return
+		i := int(j) - 1
+		if i >= len(s.rows) || i < 0 {
+			return false
 		}
-		s.target = s.rows[i]
+		s.target = l.rows[i]
 		s.list.Items = []string{s.target}
 		s.list.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", s.index)
+		ui.Render(showNumbers(l), f.list, s.list)
 	}
-}
-
-func (s *sshList) showConfirm() {
-	mode = modeConfirm
-	label := fmt.Sprintf("Really ssh to %s (y/n)?", s.target)
-	c := ui.NewList()
-	c.Items = []string{}
-	c.ItemFgColor = ui.ColorYellow
-	c.BorderLabel = label
-	c.Height = 3
-	c.Width = len(label) + 4
-	c.Y = 0
-	ui.Clear()
-	ui.Render(c)
+	return false
 }
 
 func (f *filterList) delete() {
@@ -221,18 +202,19 @@ func (f *filterList) filter(s string, l *resultList) {
 	switch s {
 	case "C-8":
 		f.delete()
-	case "<ender>":
+	case "<enter>":
 		f.enter()
 	default:
 		f.sep += s
 	}
+	f.list.Items = []string{f.sep}
 	var out []string
 	for _, r := range f.rows {
 		if strings.Index(r, f.sep) > -1 {
 			out = append(out, r)
 		}
 	}
-	l.list.Items = out
+	l.rows = out
 }
 
 func getString(d interface{}) string {
@@ -323,6 +305,15 @@ func login(host string) {
 	session.Wait()
 }
 
+func showNumbers(l *resultList) *ui.List {
+	out := make([]string, len(l.rows))
+	for i, r := range l.rows {
+		out[i] = fmt.Sprintf("%d %s", i+1, r)
+	}
+	l.list.Items = out
+	return l.list
+}
+
 func getLists(rows []string) (*resultList, *filterList, *sshList) {
 	width := getWidth(rows)
 
@@ -331,7 +322,7 @@ func getLists(rows []string) (*resultList, *filterList, *sshList) {
 	ls.ItemFgColor = userTheme.list
 	ls.BorderLabel = "sesults (C-d to exit)"
 	ls.Height = len(rows) + 2
-	ls.Width = width + 4
+	ls.Width = width + 7
 	ls.Y = 0
 
 	f := ui.NewList()
