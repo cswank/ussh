@@ -86,25 +86,7 @@ func main() {
 	defer r.Body.Close()
 	rows := getRows(r.Body)
 	targets := showResults(rows)
-	if len(targets) == 1 {
-		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, targets[0]))
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
-			log.Fatal("couldn't ssh", err)
-		}
-	} else if len(targets) > 1 {
-		for i, x := range targets {
-			targets[i] = fmt.Sprintf("%s@%s", username, x)
-		}
-		cmd := exec.Command("csshx", targets...)
-		err := cmd.Run()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	login(targets)
 }
 
 func getRows(body io.Reader) []string {
@@ -240,14 +222,17 @@ func getString(d interface{}) string {
 	return strings.Replace(k, "}", "", -1)
 }
 
-func getWidth(rows []string) int {
+func getWidth(rows []string, label string) int {
 	max := 0
 	for _, r := range rows {
 		if len(r) > max {
 			max = len(r)
 		}
 	}
-	return max
+	if len(label) > max {
+		return len(label) + 3
+	}
+	return max + 7
 }
 
 func getIndex(d interface{}) (int, error) {
@@ -266,14 +251,15 @@ func (l *lists) showNumbers(rows []string) {
 }
 
 func getLists(rows []string) *lists {
-	width := getWidth(rows)
+	label := "results (C-d to exit, C-a to csshx to all)"
+	width := getWidth(rows, label)
 
 	ls := ui.NewList()
 	ls.Items = rows
 	ls.ItemFgColor = userTheme.list
-	ls.BorderLabel = "sesults (C-d to exit)"
+	ls.BorderLabel = label
 	ls.Height = len(rows) + 2
-	ls.Width = width + 7
+	ls.Width = width
 	ls.Y = 0
 
 	f := ui.NewList()
@@ -281,7 +267,7 @@ func getLists(rows []string) *lists {
 	f.ItemFgColor = userTheme.filter
 	f.BorderLabel = "filter (C-f)"
 	f.Height = 3
-	f.Width = width + 4
+	f.Width = width
 	f.Y = len(rows) + 2
 
 	s := ui.NewList()
@@ -289,7 +275,7 @@ func getLists(rows []string) *lists {
 	s.ItemFgColor = userTheme.ssh
 	s.BorderLabel = "ssh to (enter number)"
 	s.Height = 3
-	s.Width = width + 4
+	s.Width = width
 	s.Y = len(rows) + 5
 
 	return &lists{rows: rows, list: ls, filter: f, ssh: s}
@@ -306,4 +292,26 @@ func getConfrm(result string) *ui.List {
 	c.Width = len(label) + 4
 	c.Y = 0
 	return c
+}
+
+func login(targets []string) {
+	if len(targets) == 1 && targets[0] != "" {
+		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, targets[0]))
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			log.Fatal("couldn't ssh", err)
+		}
+	} else if len(targets) > 1 {
+		for i, x := range targets {
+			targets[i] = fmt.Sprintf("%s@%s", username, x)
+		}
+		cmd := exec.Command("csshx", targets...)
+		err := cmd.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }
