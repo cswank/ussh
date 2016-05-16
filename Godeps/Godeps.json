@@ -1,0 +1,43 @@
+{
+	"ImportPath": "github.com/cswank/ussh",
+	"GoVersion": "go1.5.1",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/alecthomas/template",
+			"Rev": "b867cc6ab45cece8143cfcc6fc9c77cf3f2c23c0"
+		},
+		{
+			"ImportPath": "github.com/alecthomas/units",
+			"Rev": "6b4e7dc5e3143b85ea77909c72caf89416fc2915"
+		},
+		{
+			"ImportPath": "github.com/gizak/termui",
+			"Rev": "6a96276a036b97e1de2ee191e8ca041c5e779099"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-runewidth",
+			"Comment": "travisish-28-g8adae32",
+			"Rev": "8adae32de8a26f36cc7acaa53051407d514bb5f0"
+		},
+		{
+			"ImportPath": "github.com/mitchellh/go-wordwrap",
+			"Rev": "ad45545899c7b13c020ea92b2072220eefad42b8"
+		},
+		{
+			"ImportPath": "github.com/nsf/termbox-go",
+			"Rev": "362329b0aa6447eadd52edd8d660ec1dff470295"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh",
+			"Rev": "77de70a8d459abbd88b95faa92f4a69bd2f5a7d8"
+		},
+		{
+			"ImportPath": "gopkg.in/alecthomas/kingpin.v2",
+			"Comment": "v2.1.0",
+			"Rev": "72bf19f454c6822cfb2cf128c77ef8d70667df35"
+		}
+	]
+}
