@@ -161,10 +161,18 @@ func (l *lists) getResult(in string) bool {
 		l.index = ""
 		l.targets = []string{""}
 		l.ssh.Items = []string{""}
+		l.ssh.Height = 3
 		l.ssh.BorderLabel = "ssh to (enter number)"
-		ui.Render(l.list, l.filter, l.ssh)
+		ui.Clear()
+	case ",":
+		l.index = ""
+		l.targets = append(l.targets, "")
+		l.ssh.Items = append(l.ssh.Items, "")
+		l.ssh.Height = l.ssh.Height + 1
 	default:
-		index := l.index + getString(in)
+		s := getString(in)
+		parts := strings.Split(s, ",")
+		index := l.index + parts[len(parts)-1]
 		j, err := strconv.ParseInt(index, 10, 64)
 		if err != nil {
 			return false
@@ -176,12 +184,12 @@ func (l *lists) getResult(in string) bool {
 		l.index = index
 		i--
 		r := l.list.Items[i]
-		parts := strings.Split(r, " ")
-		l.targets = []string{parts[len(parts)-1]}
-		l.ssh.Items = []string{l.targets[0]}
+		parts = strings.Split(r, " ")
+		l.targets[len(l.targets)-1] = parts[len(parts)-1]
+		l.ssh.Items[len(l.ssh.Items)-1] = l.targets[len(l.targets)-1]
 		l.ssh.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", l.index)
-		ui.Render(l.list, l.filter, l.ssh)
 	}
+	ui.Render(l.list, l.filter, l.ssh)
 	return false
 }
 
@@ -278,7 +286,7 @@ func getLists(rows []string) *lists {
 	s.Width = width
 	s.Y = len(rows) + 5
 
-	return &lists{rows: rows, list: ls, filter: f, ssh: s}
+	return &lists{rows: rows, list: ls, filter: f, ssh: s, targets: []string{""}}
 }
 
 func getConfrm(result string) *ui.List {
