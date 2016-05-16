@@ -11,8 +11,7 @@ Install
 
     git clone http://github.com/cswank/ussh
     cd ussh
-    go get
-    go install
+    godep go install
 
 Usage
 =====
@@ -23,6 +22,8 @@ In order to use it you must set
     export UPTIME_KEY=<the uptime secret key (see https://uptime.ops.sendgrid.net to get the key)>
     export UPTIME_USER=<your ldap username>
 
+Optional, if you use a light background terminal:
+    export UPTIME_THEME=light
 
 Then type, for example
 
