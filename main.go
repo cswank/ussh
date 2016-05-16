@@ -62,22 +62,13 @@ type resp struct {
 	Results []result `json:"results"`
 }
 
-type resultList struct {
+type lists struct {
 	rows   []string
-	filter string
 	list   *ui.List
-}
-
-type filterList struct {
-	sep  string
-	rows []string
-	list *ui.List
-}
-
-type sshList struct {
-	rows   []string
+	filter *ui.List
+	ssh    *ui.List
+	search string
 	index  string
-	list   *ui.List
 	target string
 }
 
@@ -125,96 +116,100 @@ func showResults(rows []string) string {
 	}
 	defer ui.Close()
 
-	ls, f, t := getLists(rows)
+	ls := getLists(rows)
+	ls.showNumbers(ls.rows)
 
-	ui.Render(showNumbers(ls), f.list, t.list)
+	ui.Render(ls.list, ls.filter, ls.ssh)
 
 	ui.Handle("/sys/kbd/C-d", func(ui.Event) {
-		t.target = ""
+		ls.target = ""
 		ui.StopLoop()
 	})
 
 	ui.Handle("/sys/kbd/C-f", func(ui.Event) {
 		mode = modeSearch
-		f.list.BorderLabel = "Filter (enter when done)"
-		ui.Render(ls.list, f.list, t.list)
+		ls.filter.BorderLabel = "Filter (enter when done)"
+		ui.Render(ls.list, ls.filter, ls.ssh)
 	})
 
 	ui.Handle("/sys/kbd", func(e ui.Event) {
 		s := getString(e.Data)
 		switch mode {
 		case modeSearch:
-			f.filter(s, ls)
-			ui.Render(showNumbers(ls), f.list, t.list)
+			ls.doFilter(s)
+			ui.Render(ls.list, ls.filter, ls.ssh)
 		default:
-			if t.getResult(s, ls, f) {
+			if ls.getResult(s) {
 				ui.StopLoop()
 			}
 		}
 	})
-
 	ui.Loop()
-	return t.target
+	return ls.target
 }
 
-func (s *sshList) getResult(in string, l *resultList, f *filterList) bool {
+func (l *lists) getResult(in string) bool {
 	switch in {
 	case "<enter>":
 		return true
 	case "C-8":
-		s.index = ""
-		s.target = ""
-		s.list.BorderLabel = "ssh to (enter number)"
-		s.list.Items = []string{""}
-		ui.Render(showNumbers(l), f.list, s.list)
+		l.index = ""
+		l.target = ""
+		l.ssh.Items = []string{""}
+		l.ssh.BorderLabel = "ssh to (enter number)"
+		ui.Render(l.list, l.filter, l.ssh)
 	default:
-		s.index += getString(in)
-		j, err := strconv.ParseInt(s.index, 10, 64)
+		index := l.index + getString(in)
+		j, err := strconv.ParseInt(index, 10, 64)
 		if err != nil {
 			return false
 		}
-		i := int(j) - 1
-		if i >= len(s.rows) || i < 0 {
+		i := int(j)
+		if i > len(l.list.Items) || i <= 0 {
 			return false
 		}
-		s.target = l.rows[i]
-		s.list.Items = []string{s.target}
-		s.list.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", s.index)
-		ui.Render(showNumbers(l), f.list, s.list)
+		l.index = index
+		i--
+		r := l.list.Items[i]
+		parts := strings.Split(r, " ")
+		l.target = parts[len(parts)-1]
+		l.ssh.Items = []string{l.target}
+		l.ssh.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", l.index)
+		ui.Render(l.list, l.filter, l.ssh)
 	}
 	return false
 }
 
-func (f *filterList) delete() {
-	end := len(f.sep) - 1
+func (l *lists) delete() {
+	end := len(l.search) - 1
 	if end < 0 {
 		end = 0
 	}
-	f.sep = f.sep[0:end]
+	l.search = l.search[0:end]
 }
 
-func (f *filterList) enter() {
+func (l *lists) enter() {
 	mode = modeDefault
-	f.list.BorderLabel = "Filter (C-f)"
+	l.filter.BorderLabel = "Filter (C-f)"
 }
 
-func (f *filterList) filter(s string, l *resultList) {
+func (l *lists) doFilter(s string) {
 	switch s {
 	case "C-8":
-		f.delete()
+		l.delete()
 	case "<enter>":
-		f.enter()
+		l.enter()
 	default:
-		f.sep += s
+		l.search += s
 	}
-	f.list.Items = []string{f.sep}
+	l.filter.Items = []string{l.search}
 	var out []string
-	for _, r := range f.rows {
-		if strings.Index(r, f.sep) > -1 {
+	for _, r := range l.rows {
+		if strings.Index(r, l.search) > -1 {
 			out = append(out, r)
 		}
 	}
-	l.rows = out
+	l.showNumbers(out)
 }
 
 func getString(d interface{}) string {
@@ -305,16 +300,15 @@ func login(host string) {
 	session.Wait()
 }
 
-func showNumbers(l *resultList) *ui.List {
-	out := make([]string, len(l.rows))
-	for i, r := range l.rows {
-		out[i] = fmt.Sprintf("%d %s", i+1, r)
+func (l *lists) showNumbers(rows []string) {
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = fmt.Sprintf("%-2d %s", i+1, r)
 	}
 	l.list.Items = out
-	return l.list
 }
 
-func getLists(rows []string) (*resultList, *filterList, *sshList) {
+func getLists(rows []string) *lists {
 	width := getWidth(rows)
 
 	ls := ui.NewList()
@@ -341,7 +335,7 @@ func getLists(rows []string) (*resultList, *filterList, *sshList) {
 	s.Width = width + 4
 	s.Y = len(rows) + 5
 
-	return &resultList{rows: rows, list: ls}, &filterList{rows: rows, list: f}, &sshList{rows: rows, list: s}
+	return &lists{rows: rows, list: ls, filter: f, ssh: s}
 }
 
 func getConfrm(result string) *ui.List {
