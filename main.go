@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
-
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/terminal"
 
 	ui "github.com/gizak/termui"
 
@@ -63,13 +59,13 @@ type resp struct {
 }
 
 type lists struct {
-	rows   []string
-	list   *ui.List
-	filter *ui.List
-	ssh    *ui.List
-	search string
-	index  string
-	target string
+	rows    []string
+	list    *ui.List
+	filter  *ui.List
+	ssh     *ui.List
+	search  string
+	index   string
+	targets []string
 }
 
 func init() {
@@ -89,9 +85,25 @@ func main() {
 	}
 	defer r.Body.Close()
 	rows := getRows(r.Body)
-	s := showResults(rows)
-	if s != "" {
-		login(s)
+	targets := showResults(rows)
+	if len(targets) == 1 {
+		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, targets[0]))
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			log.Fatal("couldn't ssh", err)
+		}
+	} else if len(targets) > 1 {
+		for i, x := range targets {
+			targets[i] = fmt.Sprintf("%s@%s", username, x)
+		}
+		cmd := exec.Command("csshx", targets...)
+		err := cmd.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -109,7 +121,7 @@ func getRows(body io.Reader) []string {
 	return rows
 }
 
-func showResults(rows []string) string {
+func showResults(rows []string) []string {
 	err := ui.Init()
 	if err != nil {
 		panic(err)
@@ -122,7 +134,7 @@ func showResults(rows []string) string {
 	ui.Render(ls.list, ls.filter, ls.ssh)
 
 	ui.Handle("/sys/kbd/C-d", func(ui.Event) {
-		ls.target = ""
+		ls.targets = []string{""}
 		ui.StopLoop()
 	})
 
@@ -130,6 +142,17 @@ func showResults(rows []string) string {
 		mode = modeSearch
 		ls.filter.BorderLabel = "Filter (enter when done)"
 		ui.Render(ls.list, ls.filter, ls.ssh)
+	})
+
+	ui.Handle("/sys/kbd/C-a", func(ui.Event) {
+		out := make([]string, len(ls.list.Items))
+		for i, x := range ls.list.Items {
+			parts := strings.Split(x, " ")
+			out[i] = parts[len(parts)-1]
+		}
+		ls.targets = out
+		fmt.Println(out)
+		ui.StopLoop()
 	})
 
 	ui.Handle("/sys/kbd", func(e ui.Event) {
@@ -145,7 +168,7 @@ func showResults(rows []string) string {
 		}
 	})
 	ui.Loop()
-	return ls.target
+	return ls.targets
 }
 
 func (l *lists) getResult(in string) bool {
@@ -154,7 +177,7 @@ func (l *lists) getResult(in string) bool {
 		return true
 	case "C-8":
 		l.index = ""
-		l.target = ""
+		l.targets = []string{""}
 		l.ssh.Items = []string{""}
 		l.ssh.BorderLabel = "ssh to (enter number)"
 		ui.Render(l.list, l.filter, l.ssh)
@@ -172,8 +195,8 @@ func (l *lists) getResult(in string) bool {
 		i--
 		r := l.list.Items[i]
 		parts := strings.Split(r, " ")
-		l.target = parts[len(parts)-1]
-		l.ssh.Items = []string{l.target}
+		l.targets = []string{parts[len(parts)-1]}
+		l.ssh.Items = []string{l.targets[0]}
 		l.ssh.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", l.index)
 		ui.Render(l.list, l.filter, l.ssh)
 	}
@@ -232,72 +255,6 @@ func getIndex(d interface{}) (int, error) {
 	k = strings.Replace(k, "}", "", -1)
 	i, err := strconv.ParseInt(k, 10, 64)
 	return int(i), err
-}
-
-func login(host string) {
-
-	conn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-	ag := agent.NewClient(conn)
-	auths := []ssh.AuthMethod{ssh.PublicKeysCallback(ag.Signers)}
-
-	config := &ssh.ClientConfig{
-		User: username,
-		Auth: auths,
-	}
-
-	// Connect to the remote server and perform the SSH handshake.
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", host), config)
-	if err != nil {
-		log.Fatalf("unable to connect: %v", err)
-	}
-	defer client.Close()
-
-	session, err := client.NewSession()
-	if err != nil {
-		panic("Failed to create session: " + err.Error())
-	}
-	defer session.Close()
-
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
-	session.Stdin = os.Stdin
-
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          1,     // enable echoing
-		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	}
-
-	fileDescriptor := int(os.Stdin.Fd())
-
-	if terminal.IsTerminal(fileDescriptor) {
-		originalState, err := terminal.MakeRaw(fileDescriptor)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer terminal.Restore(fileDescriptor, originalState)
-
-		termWidth, termHeight, err := terminal.GetSize(fileDescriptor)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = session.RequestPty("xterm-256color", termHeight, termWidth, modes)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	err = session.Shell()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	session.Wait()
 }
 
 func (l *lists) showNumbers(rows []string) {
