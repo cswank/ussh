@@ -33,13 +33,26 @@ var (
 			ssh:    ui.ColorGreen,
 		},
 	}
-	mode int
+	mode     int
+	lastMode int
 )
+
+var helpStr = `Enter the number of the host(s) you want to ssh to then press enter.
+
+Filter the list down by typeing C-f then type characters that appear in all the hosts you are searching for.  When you are done filtering hit enter.
+
+You can select multiple hosts in two ways.  One is to use the filter to narrow down results then press C-a to start a csshx sesssion.  The other way is to type the number of each host separated by commas.  Then press enter to cssh to those hosts.
+
+C-d to exit without sshing to anything.
+
+Type q to exit this help.
+`
 
 const (
 	modeDefault int = iota
 	modeSearch
 	modeConfirm
+	modeHelp
 )
 
 type theme struct {
@@ -58,7 +71,7 @@ type uptime struct {
 }
 
 type lists struct {
-	rows    []string
+	hosts   []string
 	list    *ui.List
 	filter  *ui.List
 	ssh     *ui.List
@@ -77,20 +90,21 @@ func init() {
 
 func main() {
 	kingpin.Parse()
-	rows := getRows()
-	targets := getTargets(rows)
+	hosts := getHosts()
+	targets := getTargets(hosts)
 	login(targets)
 }
 
-func getTargets(rows []string) []string {
+func getTargets(hosts []string) []string {
 	err := ui.Init()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer ui.Close()
 
-	ls := getLists(rows)
-	ls.showNumbers(ls.rows)
+	ls := getLists(hosts)
+	help := getHelp()
+	ls.showNumbers(ls.hosts)
 
 	ui.Render(ls.list, ls.filter, ls.ssh)
 
@@ -105,6 +119,14 @@ func getTargets(rows []string) []string {
 		mode = modeSearch
 		ls.filter.BorderLabel = "Filter (enter when done)"
 		ui.Render(ls.list, ls.filter, ls.ssh)
+	})
+
+	//help
+	ui.Handle("/sys/kbd/<backspace>", func(ui.Event) {
+		lastMode = mode
+		mode = modeHelp
+		ui.Clear()
+		ui.Render(help)
 	})
 
 	//cssh to all visible hosts
@@ -122,6 +144,10 @@ func getTargets(rows []string) []string {
 	ui.Handle("/sys/kbd", func(e ui.Event) {
 		s := getString(e.Data)
 		switch mode {
+		case modeHelp:
+			mode = lastMode
+			ui.Clear()
+			ui.Render(ls.list, ls.filter, ls.ssh)
 		case modeSearch:
 			ls.doFilter(s)
 			ui.Render(ls.list, ls.filter, ls.ssh)
@@ -199,9 +225,9 @@ func (l *lists) doFilter(s string) {
 	}
 	l.filter.Items = []string{l.search}
 	var out []string
-	for _, r := range l.rows {
-		if strings.Index(r, l.search) > -1 {
-			out = append(out, r)
+	for _, h := range l.hosts {
+		if strings.Index(h, l.search) > -1 {
+			out = append(out, h)
 		}
 	}
 	l.showNumbers(out)
@@ -212,11 +238,11 @@ func getString(d interface{}) string {
 	return strings.Replace(k, "}", "", -1)
 }
 
-func getWidth(rows []string, label string) int {
+func getWidth(hosts []string, label string) int {
 	max := 0
-	for _, r := range rows {
-		if len(r) > max {
-			max = len(r)
+	for _, h := range hosts {
+		if len(h) > max {
+			max = len(h)
 		}
 	}
 	if len(label) > max {
@@ -232,25 +258,34 @@ func getIndex(d interface{}) (int, error) {
 	return int(i), err
 }
 
-func (l *lists) showNumbers(rows []string) {
-	out := make([]string, len(rows))
-	for i, r := range rows {
+func (l *lists) showNumbers(hosts []string) {
+	out := make([]string, len(hosts))
+	for i, r := range hosts {
 		out[i] = fmt.Sprintf("%-2d %s", i+1, r)
 	}
 	l.list.Items = out
 }
 
-func getLists(rows []string) *lists {
-	label := "results (C-d to exit, C-a to csshx to all)"
-	width := getWidth(rows, label)
+func getHelp() *ui.Par {
+	par := ui.NewPar(helpStr)
+	par.Height = 15
+	par.Width = 80
+	par.Y = 1
+	par.Border = true
+	return par
+}
 
-	h := len(rows) + 2
+func getLists(hosts []string) *lists {
+	label := "results (C-d to exit, C-a to csshx to all)"
+	width := getWidth(hosts, label)
+
+	h := len(hosts) + 2
 	if h > 50 {
 		h = 50
 	}
 
 	ls := ui.NewList()
-	ls.Items = rows
+	ls.Items = hosts
 	ls.ItemFgColor = userTheme.list
 	ls.BorderLabel = label
 	ls.Height = h
@@ -273,7 +308,7 @@ func getLists(rows []string) *lists {
 	s.Width = width
 	s.Y = h + 5
 
-	return &lists{rows: rows, list: ls, filter: f, ssh: s, targets: []string{""}}
+	return &lists{hosts: hosts, list: ls, filter: f, ssh: s, targets: []string{""}}
 }
 
 func getConfrm(result string) *ui.List {
@@ -311,7 +346,7 @@ func login(targets []string) {
 	}
 }
 
-func getRows() []string {
+func getHosts() []string {
 	q := strings.Replace(*query, "%", "%25", -1)
 	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, key))
 	if err != nil {
@@ -324,10 +359,10 @@ func getRows() []string {
 	if err := dec.Decode(&u); err != nil {
 		log.Fatal(err)
 	}
-	rows := make([]string, len(u.Results))
+	hosts := make([]string, len(u.Results))
 
 	for i, x := range u.Results {
-		rows[i] = x.Host
+		hosts[i] = x.Host
 	}
-	return rows
+	return hosts
 }
