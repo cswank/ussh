@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -53,7 +52,7 @@ type result struct {
 	Host string `json:"fqdn"`
 }
 
-type resp struct {
+type uptime struct {
 	Message string   `json:"message"`
 	Results []result `json:"results"`
 }
@@ -78,35 +77,15 @@ func init() {
 
 func main() {
 	kingpin.Parse()
-	q := strings.Replace(*query, "%", "%25", -1)
-	r, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, key))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer r.Body.Close()
-	rows := getRows(r.Body)
-	targets := showResults(rows)
+	rows := getRows()
+	targets := getTargets(rows)
 	login(targets)
 }
 
-func getRows(body io.Reader) []string {
-	var r resp
-	dec := json.NewDecoder(body)
-	if err := dec.Decode(&r); err != nil {
-		log.Fatal(err)
-	}
-	rows := make([]string, len(r.Results))
-
-	for i, x := range r.Results {
-		rows[i] = x.Host
-	}
-	return rows
-}
-
-func showResults(rows []string) []string {
+func getTargets(rows []string) []string {
 	err := ui.Init()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer ui.Close()
 
@@ -115,17 +94,20 @@ func showResults(rows []string) []string {
 
 	ui.Render(ls.list, ls.filter, ls.ssh)
 
+	//exit
 	ui.Handle("/sys/kbd/C-d", func(ui.Event) {
 		ls.targets = []string{""}
 		ui.StopLoop()
 	})
 
+	//enter search mode
 	ui.Handle("/sys/kbd/C-f", func(ui.Event) {
 		mode = modeSearch
 		ls.filter.BorderLabel = "Filter (enter when done)"
 		ui.Render(ls.list, ls.filter, ls.ssh)
 	})
 
+	//cssh to all visible hosts
 	ui.Handle("/sys/kbd/C-a", func(ui.Event) {
 		out := make([]string, len(ls.list.Items))
 		for i, x := range ls.list.Items {
@@ -133,10 +115,10 @@ func showResults(rows []string) []string {
 			out[i] = parts[len(parts)-1]
 		}
 		ls.targets = out
-		fmt.Println(out)
 		ui.StopLoop()
 	})
 
+	//handle input
 	ui.Handle("/sys/kbd", func(e ui.Event) {
 		s := getString(e.Data)
 		switch mode {
@@ -322,4 +304,25 @@ func login(targets []string) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func getRows() []string {
+	q := strings.Replace(*query, "%", "%25", -1)
+	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, key))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var u uptime
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&u); err != nil {
+		log.Fatal(err)
+	}
+	rows := make([]string, len(u.Results))
+
+	for i, x := range u.Results {
+		rows[i] = x.Host
+	}
+	return rows
 }
