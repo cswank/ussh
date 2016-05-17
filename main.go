@@ -244,11 +244,16 @@ func getLists(rows []string) *lists {
 	label := "results (C-d to exit, C-a to csshx to all)"
 	width := getWidth(rows, label)
 
+	h := len(rows) + 2
+	if h > 50 {
+		h = 50
+	}
+
 	ls := ui.NewList()
 	ls.Items = rows
 	ls.ItemFgColor = userTheme.list
 	ls.BorderLabel = label
-	ls.Height = len(rows) + 2
+	ls.Height = h
 	ls.Width = width
 	ls.Y = 0
 
@@ -258,7 +263,7 @@ func getLists(rows []string) *lists {
 	f.BorderLabel = "filter (C-f)"
 	f.Height = 3
 	f.Width = width
-	f.Y = len(rows) + 2
+	f.Y = h + 2
 
 	s := ui.NewList()
 	s.Items = []string{""}
@@ -266,7 +271,7 @@ func getLists(rows []string) *lists {
 	s.BorderLabel = "ssh to (enter number)"
 	s.Height = 3
 	s.Width = width
-	s.Y = len(rows) + 5
+	s.Y = h + 5
 
 	return &lists{rows: rows, list: ls, filter: f, ssh: s, targets: []string{""}}
 }
