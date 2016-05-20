@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -75,7 +76,7 @@ type lists struct {
 	list    *ui.List
 	filter  *ui.List
 	ssh     *ui.List
-	search  string
+	search  []string
 	index   string
 	targets []string
 }
@@ -150,6 +151,7 @@ func getTargets(hosts []string) []string {
 			ui.Render(ls.list, ls.filter, ls.ssh)
 		case modeSearch:
 			ls.doFilter(s)
+			ui.Clear()
 			ui.Render(ls.list, ls.filter, ls.ssh)
 		default:
 			if ls.getResult(s) {
@@ -161,18 +163,19 @@ func getTargets(hosts []string) []string {
 	return ls.targets
 }
 
+// true means the user hit enter and they want to
+// ssh to the host(s).
 func (l *lists) getResult(in string) bool {
 	switch in {
 	case "<enter>":
 		return true
-	case "C-8":
+	case "C-8": //delete key on a mac
 		l.index = ""
 		l.targets = []string{""}
 		l.ssh.Items = []string{""}
 		l.ssh.Height = 3
 		l.ssh.BorderLabel = "ssh to (enter number)"
-		ui.Clear()
-	case ",":
+	case ",": //user wants to ssh to multiple hosts
 		l.index = ""
 		l.targets = append(l.targets, "")
 		l.ssh.Items = append(l.ssh.Items, "")
@@ -197,16 +200,30 @@ func (l *lists) getResult(in string) bool {
 		l.ssh.Items[len(l.ssh.Items)-1] = l.targets[len(l.targets)-1]
 		l.ssh.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", l.index)
 	}
+	ui.Clear()
 	ui.Render(l.list, l.filter, l.ssh)
 	return false
 }
 
-func (l *lists) delete() {
-	end := len(l.search) - 1
+func (l *lists) delete(src []string) ([]string, bool) {
+	nItems := len(src)
+	s := src[nItems-1]
+	if len(s) == 0 {
+		return src, false
+	}
+
+	if len(s) == 1 && nItems > 1 {
+		src = src[:nItems-1]
+		return src, true
+	}
+
+	end := len(s) - 1
+
 	if end < 0 {
 		end = 0
 	}
-	l.search = l.search[0:end]
+	src[nItems-1] = s[0:end]
+	return src, false
 }
 
 func (l *lists) enter() {
@@ -217,20 +234,40 @@ func (l *lists) enter() {
 func (l *lists) doFilter(s string) {
 	switch s {
 	case "C-8":
-		l.delete()
+		var trunc bool
+		l.filter.Items, trunc = l.delete(l.filter.Items)
+		if trunc {
+			l.filter.Height--
+			l.ssh.Y--
+		}
+	case ",":
+		l.filter.Items = append(l.filter.Items, "")
+		l.filter.Height++
+		l.ssh.Y++
+		return
 	case "<enter>":
 		l.enter()
+		return
 	default:
-		l.search += s
+		l.filter.Items[len(l.filter.Items)-1] += s
 	}
-	l.filter.Items = []string{l.search}
 	var out []string
 	for _, h := range l.hosts {
-		if strings.Index(h, l.search) > -1 {
+		if l.keep(h) {
 			out = append(out, h)
 		}
 	}
+	l.list.Items = out
 	l.showNumbers(out)
+}
+
+func (l *lists) keep(h string) bool {
+	for _, s := range l.filter.Items {
+		if strings.Index(h, s) == -1 {
+			return false
+		}
+	}
+	return true
 }
 
 func getString(d interface{}) string {
@@ -298,7 +335,7 @@ func getLists(hosts []string) *lists {
 	f.BorderLabel = "filter (C-f)"
 	f.Height = 3
 	f.Width = width
-	f.Y = h + 2
+	f.Y = h + 1
 
 	s := ui.NewList()
 	s.Items = []string{""}
@@ -308,7 +345,7 @@ func getLists(hosts []string) *lists {
 	s.Width = width
 	s.Y = h + 5
 
-	return &lists{hosts: hosts, list: ls, filter: f, ssh: s, targets: []string{""}}
+	return &lists{hosts: hosts, list: ls, filter: f, ssh: s, targets: []string{""}, search: []string{""}}
 }
 
 func getConfrm(result string) *ui.List {
@@ -364,5 +401,7 @@ func getHosts() []string {
 	for i, x := range u.Results {
 		hosts[i] = x.Host
 	}
+
+	sort.Strings(hosts)
 	return hosts
 }
