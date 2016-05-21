@@ -8,59 +8,19 @@ import (
 	"os"
 	"os/exec"
 	"sort"
-	"strconv"
 	"strings"
 
-	ui "github.com/gizak/termui"
-
+	"github.com/jroimartin/gocui"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	query     = kingpin.Arg("query", "search string").String()
-	addr      = os.Getenv("UPTIME_ADDR")
-	username  = os.Getenv("UPTIME_USER")
-	key       = os.Getenv("UPTIME_KEY")
-	userTheme theme
-	themes    = map[string]theme{
-		"light": {
-			list:   ui.ColorBlack,
-			filter: ui.ColorBlack,
-			ssh:    ui.ColorBlack,
-		},
-		"dark": {
-			list:   ui.ColorYellow,
-			filter: ui.ColorGreen,
-			ssh:    ui.ColorGreen,
-		},
-	}
-	mode     int
-	lastMode int
+	query    = kingpin.Arg("query", "search string").String()
+	addr     = os.Getenv("UPTIME_ADDR")
+	username = os.Getenv("UPTIME_USER")
+	secret   = os.Getenv("UPTIME_KEY")
+	current  string
 )
-
-var helpStr = `Enter the number of the host(s) you want to ssh to then press enter.
-
-Filter the list down by typeing C-f then type characters that appear in all the hosts you are searching for.  When you are done filtering hit enter.
-
-You can select multiple hosts in two ways.  One is to use the filter to narrow down results then press C-a to start a csshx sesssion.  The other way is to type the number of each host separated by commas.  Then press enter to cssh to those hosts.
-
-C-d to exit without sshing to anything.
-
-Type q to exit this help.
-`
-
-const (
-	modeDefault int = iota
-	modeSearch
-	modeConfirm
-	modeHelp
-)
-
-type theme struct {
-	list   ui.Attribute
-	filter ui.Attribute
-	ssh    ui.Attribute
-}
 
 type result struct {
 	Host string `json:"fqdn"`
@@ -71,22 +31,9 @@ type uptime struct {
 	Results []result `json:"results"`
 }
 
-type lists struct {
-	hosts   []string
-	list    *ui.List
-	filter  *ui.List
-	ssh     *ui.List
-	search  []string
-	index   string
-	targets []string
-}
-
 func init() {
-	var ok bool
-	userTheme, ok = themes[os.Getenv("UPTIME_THEME")]
-	if !ok {
-		userTheme = themes["dark"]
-	}
+	f, _ := os.Create("/tmp/ussh")
+	log.SetOutput(f)
 }
 
 func main() {
@@ -97,268 +44,215 @@ func main() {
 }
 
 func getTargets(hosts []string) []string {
-	err := ui.Init()
-	if err != nil {
-		log.Fatal(err)
+	g := gocui.NewGui()
+	if err := g.Init(); err != nil {
+		log.Panicln(err)
 	}
-	defer ui.Close()
+	defer g.Close()
 
-	ls := getLists(hosts)
-	help := getHelp()
-	ls.showNumbers(ls.hosts)
+	if err := keybindings(g); err != nil {
+		log.Panicln(err)
+	}
 
-	ui.Render(ls.list, ls.filter, ls.ssh)
+	current = "hosts"
 
-	//exit
-	ui.Handle("/sys/kbd/C-d", func(ui.Event) {
-		ls.targets = []string{""}
-		ui.StopLoop()
-	})
+	g.SetLayout(func(g *gocui.Gui) error {
+		x, y := g.Size()
+		size := len(hosts)
 
-	//enter search mode
-	ui.Handle("/sys/kbd/C-f", func(ui.Event) {
-		mode = modeSearch
-		ls.filter.BorderLabel = "Filter (enter when done)"
-		ui.Render(ls.list, ls.filter, ls.ssh)
-	})
-
-	//help
-	ui.Handle("/sys/kbd/<backspace>", func(ui.Event) {
-		lastMode = mode
-		mode = modeHelp
-		ui.Clear()
-		ui.Render(help)
-	})
-
-	//cssh to all visible hosts
-	ui.Handle("/sys/kbd/C-a", func(ui.Event) {
-		out := make([]string, len(ls.list.Items))
-		for i, x := range ls.list.Items {
-			parts := strings.Split(x, " ")
-			out[i] = parts[len(parts)-1]
+		if v, err := g.SetView("hosts-label", -1, -1, x, 1); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.Frame = false
+			v.FgColor = gocui.ColorGreen
+			fmt.Fprint(v, "hosts:")
 		}
-		ls.targets = out
-		ui.StopLoop()
+
+		if v, err := g.SetView("hosts", 4, 0, x, size+1); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.FgColor = gocui.ColorGreen
+			v.Highlight = true
+			v.Frame = false
+			v.SelFgColor = gocui.ColorWhite
+			for _, h := range hosts {
+				fmt.Fprintln(v, h)
+			}
+			v.SetCursor(0, 0)
+		}
+
+		if v, err := g.SetView("filter-label", -1, size, x, size+2); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.FgColor = gocui.ColorGreen
+			v.Highlight = false
+			v.Frame = false
+			v.Editable = false
+			v.SelFgColor = gocui.ColorWhite
+			fmt.Fprintln(v, "filter: ")
+		}
+
+		if v, err := g.SetView("filter", 4, size+1, x, size+3); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.FgColor = gocui.ColorGreen
+			v.Highlight = false
+			v.Frame = false
+			v.Editable = true
+		}
+
+		if v, err := g.SetView("ssh-label", -1, size+2, x, size+4); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.FgColor = gocui.ColorGreen
+			v.Highlight = false
+			v.Frame = false
+			v.Editable = false
+			v.SelFgColor = gocui.ColorWhite
+			fmt.Fprint(v, "ssh to:")
+		}
+
+		if v, err := g.SetView("targets", 4, size+3, x, y); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.FgColor = gocui.ColorGreen
+			v.Highlight = true
+			v.Frame = false
+			v.SelFgColor = gocui.ColorGreen
+		}
+		g.SetCurrentView(current)
+		return nil
+
 	})
 
-	//handle input
-	ui.Handle("/sys/kbd", func(e ui.Event) {
-		s := getString(e.Data)
-		switch mode {
-		case modeHelp:
-			mode = lastMode
-			ui.Clear()
-			ui.Render(ls.list, ls.filter, ls.ssh)
-		case modeSearch:
-			ls.doFilter(s)
-			ui.Clear()
-			ui.Render(ls.list, ls.filter, ls.ssh)
-		default:
-			if ls.getResult(s) {
-				ui.StopLoop()
+	g.SelFgColor = gocui.ColorGreen
+	g.Cursor = true
+
+	g.MainLoop()
+	t, err := g.View("targets")
+	if err != nil {
+		return []string{}
+	}
+
+	return doGetTargets(strings.Split(t.Buffer(), "\n"))
+}
+
+func doGetTargets(hosts []string) []string {
+	var out []string
+	for _, targ := range hosts {
+		if strings.Index(targ, "hosts") == -1 {
+			h := strings.TrimSpace(targ)
+			if len(h) > 0 {
+				out = append(out, h)
 			}
 		}
-	})
-	ui.Loop()
-	return ls.targets
+	}
+	return out
 }
 
-// true means the user hit enter and they want to
-// ssh to the host(s).
-func (l *lists) getResult(in string) bool {
-	switch in {
-	case "<enter>":
-		return true
-	case "C-8": //delete key on a mac
-		l.index = ""
-		l.targets = []string{""}
-		l.ssh.Items = []string{""}
-		l.ssh.Height = 3
-		l.ssh.BorderLabel = "ssh to (enter number)"
-	case ",": //user wants to ssh to multiple hosts
-		l.index = ""
-		l.targets = append(l.targets, "")
-		l.ssh.Items = append(l.ssh.Items, "")
-		l.ssh.Height = l.ssh.Height + 1
-	default:
-		s := getString(in)
-		parts := strings.Split(s, ",")
-		index := l.index + parts[len(parts)-1]
-		j, err := strconv.ParseInt(index, 10, 64)
-		if err != nil {
-			return false
-		}
-		i := int(j)
-		if i > len(l.list.Items) || i <= 0 {
-			return false
-		}
-		l.index = index
-		i--
-		r := l.list.Items[i]
-		parts = strings.Split(r, " ")
-		l.targets[len(l.targets)-1] = parts[len(parts)-1]
-		l.ssh.Items[len(l.ssh.Items)-1] = l.targets[len(l.targets)-1]
-		l.ssh.BorderLabel = fmt.Sprintf("ssh to %s (enter number)", l.index)
+func quit(g *gocui.Gui, v *gocui.View) error {
+	t, err := g.View("targets")
+	if err != nil {
+		return err
 	}
-	ui.Clear()
-	ui.Render(l.list, l.filter, l.ssh)
-	return false
+	t.Clear()
+	return gocui.ErrQuit
 }
 
-func (l *lists) delete(src []string) ([]string, bool) {
-	nItems := len(src)
-	s := src[nItems-1]
-	if len(s) == 0 {
-		return src, false
-	}
-
-	if len(s) == 1 && nItems > 1 {
-		src = src[:nItems-1]
-		return src, true
-	}
-
-	end := len(s) - 1
-
-	if end < 0 {
-		end = 0
-	}
-	src[nItems-1] = s[0:end]
-	return src, false
+func filter(g *gocui.Gui, v *gocui.View) error {
+	v, _ = g.View("filter")
+	buf := v.Buffer()
+	v.SetCursor(0, len(buf))
+	current = "filter"
+	return nil
 }
 
-func (l *lists) enter() {
-	mode = modeDefault
-	l.filter.BorderLabel = "Filter (C-f)"
+func doFilter(g *gocui.Gui, v *gocui.View) error {
+	v, _ = g.View("filter")
+	buf := v.Buffer()
+	log.Println(buf)
+	current = "hosts"
+	return nil
 }
 
-func (l *lists) doFilter(s string) {
-	switch s {
-	case "C-8":
-		var trunc bool
-		l.filter.Items, trunc = l.delete(l.filter.Items)
-		if trunc {
-			l.filter.Height--
-			l.ssh.Y--
-		}
-	case ",":
-		l.filter.Items = append(l.filter.Items, "")
-		l.filter.Height++
-		l.ssh.Y++
-		return
-	case "<enter>":
-		l.enter()
-		return
-	default:
-		l.filter.Items[len(l.filter.Items)-1] += s
-	}
-	var out []string
-	for _, h := range l.hosts {
-		if l.keep(h) {
-			out = append(out, h)
-		}
-	}
-	l.list.Items = out
-	l.showNumbers(out)
+func sshAll(g *gocui.Gui, v *gocui.View) error {
+	return gocui.ErrQuit
 }
 
-func (l *lists) keep(h string) bool {
-	for _, s := range l.filter.Items {
-		if strings.Index(h, s) == -1 {
-			return false
+func next(g *gocui.Gui, v *gocui.View) error {
+	cx, cy := v.Cursor()
+	return v.SetCursor(cx, cy+1)
+}
+
+func prev(g *gocui.Gui, v *gocui.View) error {
+	cx, cy := v.Cursor()
+	return v.SetCursor(cx, cy-1)
+}
+
+func ssh(g *gocui.Gui, v *gocui.View) error {
+	_, cy := v.Cursor()
+	l, err := v.Line(cy)
+	if err != nil {
+		return err
+	}
+	t, err := g.View("targets")
+	if err != nil {
+		return err
+	}
+	t.Clear()
+	_, err = fmt.Fprintln(t, l)
+	if err != nil {
+		return err
+	}
+	return gocui.ErrQuit
+}
+
+func sel(g *gocui.Gui, v *gocui.View) error {
+	_, cy := v.Cursor()
+	l, err := v.Line(cy)
+	if err != nil {
+		return err
+	}
+	t, err := g.View("targets")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(t, l)
+	return err
+}
+
+type key struct {
+	name string
+	key  interface{}
+	mod  gocui.Modifier
+	f    gocui.KeybindingHandler
+}
+
+var keys = []key{
+	{"", gocui.KeyCtrlC, gocui.ModNone, quit},
+	{"", gocui.KeyCtrlD, gocui.ModNone, quit},
+	{"", gocui.KeyCtrlA, gocui.ModNone, sshAll},
+	{"", gocui.KeyCtrlF, gocui.ModNone, filter},
+	{"filter", gocui.KeyEnter, gocui.ModNone, doFilter},
+	{"hosts", gocui.KeyCtrlN, gocui.ModNone, next},
+	{"hosts", gocui.KeyCtrlP, gocui.ModNone, prev},
+	{"hosts", gocui.KeySpace, gocui.ModNone, sel},
+	{"hosts", gocui.KeyEnter, gocui.ModNone, ssh},
+}
+
+func keybindings(g *gocui.Gui) error {
+	for _, k := range keys {
+		if err := g.SetKeybinding(k.name, k.key, k.mod, k.f); err != nil {
+			return err
 		}
 	}
-	return true
-}
-
-func getString(d interface{}) string {
-	k := strings.Replace(fmt.Sprintf("%s", d), "{", "", -1)
-	return strings.Replace(k, "}", "", -1)
-}
-
-func getWidth(hosts []string, label string) int {
-	max := 0
-	for _, h := range hosts {
-		if len(h) > max {
-			max = len(h)
-		}
-	}
-	if len(label) > max {
-		return len(label) + 3
-	}
-	return max + 7
-}
-
-func getIndex(d interface{}) (int, error) {
-	k := strings.Replace(fmt.Sprintf("%s", d), "{", "", -1)
-	k = strings.Replace(k, "}", "", -1)
-	i, err := strconv.ParseInt(k, 10, 64)
-	return int(i), err
-}
-
-func (l *lists) showNumbers(hosts []string) {
-	out := make([]string, len(hosts))
-	for i, r := range hosts {
-		out[i] = fmt.Sprintf("%-2d %s", i+1, r)
-	}
-	l.list.Items = out
-}
-
-func getHelp() *ui.Par {
-	par := ui.NewPar(helpStr)
-	par.Height = 15
-	par.Width = 80
-	par.Y = 1
-	par.Border = true
-	return par
-}
-
-func getLists(hosts []string) *lists {
-	label := "results (C-d to exit, C-a to csshx to all)"
-	width := getWidth(hosts, label)
-
-	h := len(hosts) + 2
-	if h > 50 {
-		h = 50
-	}
-
-	ls := ui.NewList()
-	ls.Items = hosts
-	ls.ItemFgColor = userTheme.list
-	ls.BorderLabel = label
-	ls.Height = h
-	ls.Width = width
-	ls.Y = 0
-
-	f := ui.NewList()
-	f.Items = []string{""}
-	f.ItemFgColor = userTheme.filter
-	f.BorderLabel = "filter (C-f)"
-	f.Height = 3
-	f.Width = width
-	f.Y = h + 1
-
-	s := ui.NewList()
-	s.Items = []string{""}
-	s.ItemFgColor = userTheme.ssh
-	s.BorderLabel = "ssh to (enter number)"
-	s.Height = 3
-	s.Width = width
-	s.Y = h + 5
-
-	return &lists{hosts: hosts, list: ls, filter: f, ssh: s, targets: []string{""}, search: []string{""}}
-}
-
-func getConfrm(result string) *ui.List {
-	parts := strings.Split(result, " ")
-	label := fmt.Sprintf("Really ssh to %s (y/n)?", parts[1])
-	c := ui.NewList()
-	c.Items = []string{}
-	c.ItemFgColor = ui.ColorYellow
-	c.BorderLabel = label
-	c.Height = 3
-	c.Width = len(label) + 4
-	c.Y = 0
-	return c
+	return nil
 }
 
 func login(targets []string) {
@@ -385,7 +279,7 @@ func login(targets []string) {
 
 func getHosts() []string {
 	q := strings.Replace(*query, "%", "%25", -1)
-	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, key))
+	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, secret))
 	if err != nil {
 		log.Fatal(err)
 	}
