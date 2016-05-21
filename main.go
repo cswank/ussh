@@ -1,16 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
-	"github.com/jroimartin/gocui"
+	ui "github.com/jroimartin/gocui"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -43,11 +40,70 @@ func main() {
 	login(targets)
 }
 
+func inBoth(h string, preds []string) bool {
+	for _, p := range preds {
+		if strings.Index(h, p) == -1 {
+			return false
+		}
+	}
+	return true
+}
+
+func search(hosts []string, pred string) []string {
+	pred = strings.TrimSpace(pred)
+	preds := strings.Split(pred, ",")
+
+	var out []string
+	for _, h := range hosts {
+		if inBoth(h, preds) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
 func getTargets(hosts []string) []string {
-	g := gocui.NewGui()
+	disp := make([]string, len(hosts))
+	copy(disp, hosts)
+
+	g := ui.NewGui()
+
 	if err := g.Init(); err != nil {
 		log.Panicln(err)
 	}
+
+	g.Editor = ui.EditorFunc(func(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
+		if key == ui.KeyEnter {
+			current = "hosts"
+			return
+		}
+
+		s := strings.TrimSpace(v.Buffer())
+		if key == 127 && len(s) > 0 {
+			v.Clear()
+			s = s[:len(s)-1]
+			v.Write([]byte(s))
+			disp = search(hosts, s)
+			v.SetCursor(len(s), 0)
+		} else {
+			fmt.Fprint(v, string(ch))
+			s = v.Buffer()
+			disp = search(hosts, s)
+			log.Println(s, disp)
+			v.SetCursor(len(s)-1, 0)
+		}
+
+		hv, _ := g.View("hosts")
+		hv.Clear()
+		if len(s) == 0 {
+			disp = make([]string, len(hosts))
+			copy(disp, hosts)
+		}
+		for _, h := range disp {
+			fmt.Fprintln(hv, h)
+		}
+	})
+
 	defer g.Close()
 
 	if err := keybindings(g); err != nil {
@@ -56,82 +112,81 @@ func getTargets(hosts []string) []string {
 
 	current = "hosts"
 
-	g.SetLayout(func(g *gocui.Gui) error {
+	g.SetLayout(func(g *ui.Gui) error {
 		x, y := g.Size()
 		size := len(hosts)
 
 		if v, err := g.SetView("hosts-label", -1, -1, x, 1); err != nil {
-			if err != gocui.ErrUnknownView {
+			if err != ui.ErrUnknownView {
 				return err
 			}
 			v.Frame = false
-			v.FgColor = gocui.ColorGreen
+			v.FgColor = ui.ColorGreen
 			fmt.Fprint(v, "hosts:")
 		}
 
 		if v, err := g.SetView("hosts", 4, 0, x, size+1); err != nil {
-			if err != gocui.ErrUnknownView {
+			if err != ui.ErrUnknownView {
 				return err
 			}
-			v.FgColor = gocui.ColorGreen
+			v.FgColor = ui.ColorGreen
 			v.Highlight = true
 			v.Frame = false
-			v.SelFgColor = gocui.ColorWhite
-			for _, h := range hosts {
+			v.SelFgColor = ui.ColorWhite
+			for _, h := range disp {
 				fmt.Fprintln(v, h)
 			}
-			v.SetCursor(0, 0)
 		}
 
 		if v, err := g.SetView("filter-label", -1, size, x, size+2); err != nil {
-			if err != gocui.ErrUnknownView {
+			if err != ui.ErrUnknownView {
 				return err
 			}
-			v.FgColor = gocui.ColorGreen
+			v.FgColor = ui.ColorGreen
 			v.Highlight = false
 			v.Frame = false
 			v.Editable = false
-			v.SelFgColor = gocui.ColorWhite
+			v.SelFgColor = ui.ColorWhite
 			fmt.Fprintln(v, "filter: ")
 		}
 
 		if v, err := g.SetView("filter", 4, size+1, x, size+3); err != nil {
-			if err != gocui.ErrUnknownView {
+			if err != ui.ErrUnknownView {
 				return err
 			}
-			v.FgColor = gocui.ColorGreen
+			v.FgColor = ui.ColorGreen
 			v.Highlight = false
 			v.Frame = false
 			v.Editable = true
 		}
 
 		if v, err := g.SetView("ssh-label", -1, size+2, x, size+4); err != nil {
-			if err != gocui.ErrUnknownView {
+			if err != ui.ErrUnknownView {
 				return err
 			}
-			v.FgColor = gocui.ColorGreen
+			v.FgColor = ui.ColorGreen
 			v.Highlight = false
 			v.Frame = false
 			v.Editable = false
-			v.SelFgColor = gocui.ColorWhite
+			v.SelFgColor = ui.ColorWhite
 			fmt.Fprint(v, "ssh to:")
 		}
 
 		if v, err := g.SetView("targets", 4, size+3, x, y); err != nil {
-			if err != gocui.ErrUnknownView {
+			if err != ui.ErrUnknownView {
 				return err
 			}
-			v.FgColor = gocui.ColorGreen
+			v.FgColor = ui.ColorGreen
 			v.Highlight = true
 			v.Frame = false
-			v.SelFgColor = gocui.ColorGreen
+			v.SelFgColor = ui.ColorGreen
 		}
 		g.SetCurrentView(current)
 		return nil
 
 	})
 
-	g.SelFgColor = gocui.ColorGreen
+	g.SelFgColor = ui.ColorGreen
 	g.Cursor = true
 
 	g.MainLoop()
@@ -156,16 +211,16 @@ func doGetTargets(hosts []string) []string {
 	return out
 }
 
-func quit(g *gocui.Gui, v *gocui.View) error {
+func quit(g *ui.Gui, v *ui.View) error {
 	t, err := g.View("targets")
 	if err != nil {
 		return err
 	}
 	t.Clear()
-	return gocui.ErrQuit
+	return ui.ErrQuit
 }
 
-func filter(g *gocui.Gui, v *gocui.View) error {
+func filter(g *ui.Gui, v *ui.View) error {
 	v, _ = g.View("filter")
 	buf := v.Buffer()
 	v.SetCursor(0, len(buf))
@@ -173,29 +228,27 @@ func filter(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func doFilter(g *gocui.Gui, v *gocui.View) error {
+func doFilter(g *ui.Gui, v *ui.View) error {
 	v, _ = g.View("filter")
-	buf := v.Buffer()
-	log.Println(buf)
 	current = "hosts"
 	return nil
 }
 
-func sshAll(g *gocui.Gui, v *gocui.View) error {
-	return gocui.ErrQuit
+func sshAll(g *ui.Gui, v *ui.View) error {
+	return ui.ErrQuit
 }
 
-func next(g *gocui.Gui, v *gocui.View) error {
+func next(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
 	return v.SetCursor(cx, cy+1)
 }
 
-func prev(g *gocui.Gui, v *gocui.View) error {
+func prev(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
 	return v.SetCursor(cx, cy-1)
 }
 
-func ssh(g *gocui.Gui, v *gocui.View) error {
+func ssh(g *ui.Gui, v *ui.View) error {
 	_, cy := v.Cursor()
 	l, err := v.Line(cy)
 	if err != nil {
@@ -210,10 +263,10 @@ func ssh(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	return gocui.ErrQuit
+	return ui.ErrQuit
 }
 
-func sel(g *gocui.Gui, v *gocui.View) error {
+func sel(g *ui.Gui, v *ui.View) error {
 	_, cy := v.Cursor()
 	l, err := v.Line(cy)
 	if err != nil {
@@ -230,23 +283,23 @@ func sel(g *gocui.Gui, v *gocui.View) error {
 type key struct {
 	name string
 	key  interface{}
-	mod  gocui.Modifier
-	f    gocui.KeybindingHandler
+	mod  ui.Modifier
+	f    ui.KeybindingHandler
 }
 
 var keys = []key{
-	{"", gocui.KeyCtrlC, gocui.ModNone, quit},
-	{"", gocui.KeyCtrlD, gocui.ModNone, quit},
-	{"", gocui.KeyCtrlA, gocui.ModNone, sshAll},
-	{"", gocui.KeyCtrlF, gocui.ModNone, filter},
-	{"filter", gocui.KeyEnter, gocui.ModNone, doFilter},
-	{"hosts", gocui.KeyCtrlN, gocui.ModNone, next},
-	{"hosts", gocui.KeyCtrlP, gocui.ModNone, prev},
-	{"hosts", gocui.KeySpace, gocui.ModNone, sel},
-	{"hosts", gocui.KeyEnter, gocui.ModNone, ssh},
+	{"", ui.KeyCtrlC, ui.ModNone, quit},
+	{"", ui.KeyCtrlD, ui.ModNone, quit},
+	{"", ui.KeyCtrlA, ui.ModNone, sshAll},
+	{"", ui.KeyCtrlF, ui.ModNone, filter},
+	{"filter", ui.KeyEnter, ui.ModNone, doFilter},
+	{"hosts", ui.KeyCtrlN, ui.ModNone, next},
+	{"hosts", ui.KeyCtrlP, ui.ModNone, prev},
+	{"hosts", ui.KeySpace, ui.ModNone, sel},
+	{"hosts", ui.KeyEnter, ui.ModNone, ssh},
 }
 
-func keybindings(g *gocui.Gui) error {
+func keybindings(g *ui.Gui) error {
 	for _, k := range keys {
 		if err := g.SetKeybinding(k.name, k.key, k.mod, k.f); err != nil {
 			return err
@@ -278,24 +331,34 @@ func login(targets []string) {
 }
 
 func getHosts() []string {
-	q := strings.Replace(*query, "%", "%25", -1)
-	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, secret))
-	if err != nil {
-		log.Fatal(err)
+	f := []string{"p1", "s1"}
+	c := []string{"a", "b", "c", "d", "e"}
+	out := make([]string, len(c))
+	for i, x := range c {
+		out[i] = fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])
 	}
-	defer resp.Body.Close()
-
-	var u uptime
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&u); err != nil {
-		log.Fatal(err)
-	}
-	hosts := make([]string, len(u.Results))
-
-	for i, x := range u.Results {
-		hosts[i] = x.Host
-	}
-
-	sort.Strings(hosts)
-	return hosts
+	return out
 }
+
+// func getHosts() []string {
+// 	q := strings.Replace(*query, "%", "%25", -1)
+// 	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, secret))
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer resp.Body.Close()
+
+// 	var u uptime
+// 	dec := json.NewDecoder(resp.Body)
+// 	if err := dec.Decode(&u); err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	hosts := make([]string, len(u.Results))
+
+// 	for i, x := range u.Results {
+// 		hosts[i] = x.Host
+// 	}
+
+// 	sort.Strings(hosts)
+// 	return hosts
+// }
