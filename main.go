@@ -85,6 +85,8 @@ func getTargets(hosts []string) []string {
 			v.Write([]byte(s))
 			disp = search(hosts, s)
 			v.SetCursor(len(s), 0)
+		} else if key == 127 && len(s) == 0 {
+			return
 		} else {
 			fmt.Fprint(v, string(ch))
 			s = v.Buffer()
