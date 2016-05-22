@@ -17,6 +17,7 @@ var (
 	username = os.Getenv("UPTIME_USER")
 	secret   = os.Getenv("UPTIME_KEY")
 	current  string
+	chars    = "abcdefghijklmnopqrstuvwzyzABCDEFGHIJKLMNOPQRSTUVWZYZ1234567890.-,"
 )
 
 type result struct {
@@ -62,6 +63,10 @@ func search(hosts []string, pred string) []string {
 	return out
 }
 
+func acceptable(s string) bool {
+	return strings.Index(chars, s) > -1
+}
+
 func getTargets(hosts []string) []string {
 	disp := make([]string, len(hosts))
 	copy(disp, hosts)
@@ -87,7 +92,7 @@ func getTargets(hosts []string) []string {
 			v.SetCursor(len(s), 0)
 		} else if key == 127 && len(s) == 0 {
 			return
-		} else {
+		} else if acceptable(string(ch)) {
 			fmt.Fprint(v, string(ch))
 			s = v.Buffer()
 			disp = search(hosts, s)
