@@ -167,7 +167,7 @@ func getTargets(hosts []string) []string {
 				if h.selected {
 					tpl = "\033[32m%s\033[37m\n"
 				} else {
-					tpl = "%s\n"
+					tpl = "\033[37m%s\033[37m\n"
 				}
 				fmt.Fprintf(v, tpl, h.name)
 			}
@@ -282,16 +282,8 @@ func ssh(g *ui.Gui, v *ui.View) error {
 
 func sel(g *ui.Gui, v *ui.View) error {
 	_, cy := v.Cursor()
-	l, err := v.Line(cy)
-	if err != nil {
-		return err
-	}
-	t, err := g.View("targets")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(t, l)
-	return err
+	cursor = cy
+	return nil
 }
 
 type key struct {
