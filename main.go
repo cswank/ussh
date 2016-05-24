@@ -17,8 +17,15 @@ var (
 	username = os.Getenv("UPTIME_USER")
 	secret   = os.Getenv("UPTIME_KEY")
 	current  string
+	cursor   int
 	chars    = "abcdefghijklmnopqrstuvwzyzABCDEFGHIJKLMNOPQRSTUVWZYZ1234567890.-,"
 )
+
+type host struct {
+	name     string
+	selected bool
+	hide     bool
+}
 
 type result struct {
 	Host string `json:"fqdn"`
@@ -50,17 +57,17 @@ func inBoth(h string, preds []string) bool {
 	return true
 }
 
-func search(hosts []string, pred string) []string {
+func search(hosts []host, pred string) {
 	pred = strings.TrimSpace(pred)
 	preds := strings.Split(pred, ",")
 
-	var out []string
-	for _, h := range hosts {
-		if inBoth(h, preds) {
-			out = append(out, h)
+	for i, h := range hosts {
+		if inBoth(h.name, preds) {
+			hosts[i].hide = false
+		} else {
+			hosts[i].hide = true
 		}
 	}
-	return out
 }
 
 func acceptable(s string) bool {
@@ -68,18 +75,23 @@ func acceptable(s string) bool {
 }
 
 func getTargets(hosts []string) []string {
-	disp := make([]string, len(hosts))
-	copy(disp, hosts)
+	disp := make([]host, len(hosts))
+	for i, h := range hosts {
+		disp[i] = host{name: h}
+	}
 
 	g := ui.NewGui()
+	g.FgColor = ui.ColorGreen
 
 	if err := g.Init(); err != nil {
 		log.Panicln(err)
 	}
 
+	current = "hosts-cursor"
+
 	g.Editor = ui.EditorFunc(func(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
 		if key == ui.KeyEnter {
-			current = "hosts"
+			current = "hosts-cursor"
 			return
 		}
 
@@ -88,26 +100,25 @@ func getTargets(hosts []string) []string {
 			v.Clear()
 			s = s[:len(s)-1]
 			v.Write([]byte(s))
-			disp = search(hosts, s)
+			search(disp, s)
 			v.SetCursor(len(s), 0)
 		} else if key == 127 && len(s) == 0 {
-			return
+			for i, _ := range disp {
+				disp[i].hide = false
+			}
 		} else if acceptable(string(ch)) {
 			fmt.Fprint(v, string(ch))
 			s = v.Buffer()
-			disp = search(hosts, s)
-			log.Println(s, disp)
+			search(disp, s)
 			v.SetCursor(len(s)-1, 0)
 		}
 
 		hv, _ := g.View("hosts")
 		hv.Clear()
-		if len(s) == 0 {
-			disp = make([]string, len(hosts))
-			copy(disp, hosts)
-		}
 		for _, h := range disp {
-			fmt.Fprintln(hv, h)
+			if !h.hide {
+				fmt.Fprintln(hv, h.name)
+			}
 		}
 	})
 
@@ -117,10 +128,8 @@ func getTargets(hosts []string) []string {
 		log.Panicln(err)
 	}
 
-	current = "hosts"
-
 	g.SetLayout(func(g *ui.Gui) error {
-		x, y := g.Size()
+		x, _ := g.Size()
 		size := len(hosts)
 
 		if v, err := g.SetView("hosts-label", -1, -1, x, 1); err != nil {
@@ -132,16 +141,35 @@ func getTargets(hosts []string) []string {
 			fmt.Fprint(v, "hosts:")
 		}
 
-		if v, err := g.SetView("hosts", 4, 0, x, size+1); err != nil {
+		if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
 			if err != ui.ErrUnknownView {
 				return err
 			}
 			v.FgColor = ui.ColorGreen
 			v.Highlight = true
 			v.Frame = false
-			v.SelFgColor = ui.ColorWhite
+			for range disp {
+				fmt.Fprintln(v, " ")
+			}
+		}
+
+		if v, err := g.SetView("hosts", 6, 0, x, size+1); err != nil {
+			if err != ui.ErrUnknownView {
+				return err
+			}
+			v.FgColor = ui.ColorGreen
+			v.Frame = false
 			for _, h := range disp {
-				fmt.Fprintln(v, h)
+				if h.hide {
+					continue
+				}
+				var tpl string
+				if h.selected {
+					tpl = "\033[32m%s\033[37m\n"
+				} else {
+					tpl = "%s\n"
+				}
+				fmt.Fprintf(v, tpl, h.name)
 			}
 		}
 
@@ -153,7 +181,6 @@ func getTargets(hosts []string) []string {
 			v.Highlight = false
 			v.Frame = false
 			v.Editable = false
-			v.SelFgColor = ui.ColorWhite
 			fmt.Fprintln(v, "filter: ")
 		}
 
@@ -167,30 +194,8 @@ func getTargets(hosts []string) []string {
 			v.Editable = true
 		}
 
-		if v, err := g.SetView("ssh-label", -1, size+2, x, size+4); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.FgColor = ui.ColorGreen
-			v.Highlight = false
-			v.Frame = false
-			v.Editable = false
-			v.SelFgColor = ui.ColorWhite
-			fmt.Fprint(v, "ssh to:")
-		}
-
-		if v, err := g.SetView("targets", 4, size+3, x, y); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.FgColor = ui.ColorGreen
-			v.Highlight = true
-			v.Frame = false
-			v.SelFgColor = ui.ColorGreen
-		}
 		g.SetCurrentView(current)
 		return nil
-
 	})
 
 	g.SelFgColor = ui.ColorGreen
@@ -237,7 +242,7 @@ func filter(g *ui.Gui, v *ui.View) error {
 
 func doFilter(g *ui.Gui, v *ui.View) error {
 	v, _ = g.View("filter")
-	current = "hosts"
+	current = "hosts-cursor"
 	return nil
 }
 
@@ -246,11 +251,13 @@ func sshAll(g *ui.Gui, v *ui.View) error {
 }
 
 func next(g *ui.Gui, v *ui.View) error {
+	cursor++
 	cx, cy := v.Cursor()
 	return v.SetCursor(cx, cy+1)
 }
 
 func prev(g *ui.Gui, v *ui.View) error {
+	cursor--
 	cx, cy := v.Cursor()
 	return v.SetCursor(cx, cy-1)
 }
@@ -300,10 +307,10 @@ var keys = []key{
 	{"", ui.KeyCtrlA, ui.ModNone, sshAll},
 	{"", ui.KeyCtrlF, ui.ModNone, filter},
 	{"filter", ui.KeyEnter, ui.ModNone, doFilter},
-	{"hosts", ui.KeyCtrlN, ui.ModNone, next},
-	{"hosts", ui.KeyCtrlP, ui.ModNone, prev},
-	{"hosts", ui.KeySpace, ui.ModNone, sel},
-	{"hosts", ui.KeyEnter, ui.ModNone, ssh},
+	{"hosts-cursor", ui.KeyCtrlN, ui.ModNone, next},
+	{"hosts-cursor", ui.KeyCtrlP, ui.ModNone, prev},
+	{"hosts-cursor", ui.KeySpace, ui.ModNone, sel},
+	{"hosts-cursor", ui.KeyEnter, ui.ModNone, ssh},
 }
 
 func keybindings(g *ui.Gui) error {
