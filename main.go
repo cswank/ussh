@@ -18,6 +18,7 @@ var (
 	secret   = os.Getenv("UPTIME_KEY")
 	current  string
 	cursor   int
+	disp     []host
 	chars    = "abcdefghijklmnopqrstuvwzyzABCDEFGHIJKLMNOPQRSTUVWZYZ1234567890.-,"
 )
 
@@ -75,52 +76,21 @@ func acceptable(s string) bool {
 }
 
 func getTargets(hosts []string) []string {
-	disp := make([]host, len(hosts))
+	disp = make([]host, len(hosts))
 	for i, h := range hosts {
 		disp[i] = host{name: h}
 	}
 
 	g := ui.NewGui()
-	g.FgColor = ui.ColorGreen
-
 	if err := g.Init(); err != nil {
 		log.Panicln(err)
 	}
 
+	g.FgColor = ui.ColorGreen
+
 	current = "hosts-cursor"
 
-	g.Editor = ui.EditorFunc(func(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
-		if key == ui.KeyEnter {
-			current = "hosts-cursor"
-			return
-		}
-
-		s := strings.TrimSpace(v.Buffer())
-		if key == 127 && len(s) > 0 {
-			v.Clear()
-			s = s[:len(s)-1]
-			v.Write([]byte(s))
-			search(disp, s)
-			v.SetCursor(len(s), 0)
-		} else if key == 127 && len(s) == 0 {
-			for i, _ := range disp {
-				disp[i].hide = false
-			}
-		} else if acceptable(string(ch)) {
-			fmt.Fprint(v, string(ch))
-			s = v.Buffer()
-			search(disp, s)
-			v.SetCursor(len(s)-1, 0)
-		}
-
-		hv, _ := g.View("hosts")
-		hv.Clear()
-		for _, h := range disp {
-			if !h.hide {
-				fmt.Fprintln(hv, h.name)
-			}
-		}
-	})
+	g.Editor = ui.EditorFunc(edit)
 
 	defer g.Close()
 
@@ -128,75 +98,7 @@ func getTargets(hosts []string) []string {
 		log.Panicln(err)
 	}
 
-	g.SetLayout(func(g *ui.Gui) error {
-		x, _ := g.Size()
-		size := len(hosts)
-
-		if v, err := g.SetView("hosts-label", -1, -1, x, 1); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.Frame = false
-			v.FgColor = ui.ColorGreen
-			fmt.Fprint(v, "hosts:")
-		}
-
-		if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.FgColor = ui.ColorGreen
-			v.Highlight = true
-			v.Frame = false
-			for range disp {
-				fmt.Fprintln(v, " ")
-			}
-		}
-
-		if v, err := g.SetView("hosts", 6, 0, x, size+1); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.FgColor = ui.ColorGreen
-			v.Frame = false
-			for _, h := range disp {
-				if h.hide {
-					continue
-				}
-				var tpl string
-				if h.selected {
-					tpl = "\033[32m%s\033[37m\n"
-				} else {
-					tpl = "\033[37m%s\033[37m\n"
-				}
-				fmt.Fprintf(v, tpl, h.name)
-			}
-		}
-
-		if v, err := g.SetView("filter-label", -1, size, x, size+2); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.FgColor = ui.ColorGreen
-			v.Highlight = false
-			v.Frame = false
-			v.Editable = false
-			fmt.Fprintln(v, "filter: ")
-		}
-
-		if v, err := g.SetView("filter", 4, size+1, x, size+3); err != nil {
-			if err != ui.ErrUnknownView {
-				return err
-			}
-			v.FgColor = ui.ColorGreen
-			v.Highlight = false
-			v.Frame = false
-			v.Editable = true
-		}
-
-		g.SetCurrentView(current)
-		return nil
-	})
+	g.SetLayout(layout)
 
 	g.SelFgColor = ui.ColorGreen
 	g.Cursor = true
@@ -208,6 +110,113 @@ func getTargets(hosts []string) []string {
 	}
 
 	return doGetTargets(strings.Split(t.Buffer(), "\n"))
+}
+
+func layout(g *ui.Gui) error {
+	x, _ := g.Size()
+	size := len(disp)
+
+	if v, err := g.SetView("hosts-label", -1, -1, x, 1); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.Frame = false
+		v.FgColor = ui.ColorGreen
+		fmt.Fprint(v, "hosts:")
+	}
+
+	if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.Highlight = true
+		v.Frame = false
+		for _, h := range disp {
+			if h.hide {
+				continue
+			}
+			if h.selected {
+				fmt.Fprintln(v, "x")
+			} else {
+				fmt.Fprintln(v, " ")
+			}
+		}
+	}
+
+	if v, err := g.SetView("hosts", 6, 0, x, size+1); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.Frame = false
+		for _, h := range disp {
+			if h.hide {
+				continue
+			}
+			var tpl string
+
+			if h.selected {
+				tpl = "\033[32m%s\033[37m\n"
+			} else {
+				tpl = "\033[37m%s\033[37m\n"
+			}
+			fmt.Fprintf(v, tpl, h.name)
+		}
+	}
+
+	if v, err := g.SetView("filter-label", -1, size, x, size+2); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.FgColor = ui.ColorGreen
+		v.Highlight = false
+		v.Frame = false
+		v.Editable = false
+		fmt.Fprintln(v, "filter: ")
+	}
+
+	if v, err := g.SetView("filter", 4, size+1, x, size+3); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.FgColor = ui.ColorGreen
+		v.Highlight = false
+		v.Frame = false
+		v.Editable = true
+	}
+
+	g.SetCurrentView(current)
+	return nil
+}
+
+func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
+	if key == ui.KeyEnter {
+		current = "hosts-cursor"
+		return
+	}
+	s := strings.TrimSpace(v.Buffer())
+	if key == 127 && len(s) > 0 {
+		v.Clear()
+		s = s[:len(s)-1]
+		v.Write([]byte(s))
+		search(disp, s)
+		v.SetCursor(len(s), 0)
+	} else if key == 127 && len(s) == 0 {
+		for i, _ := range disp {
+			disp[i].hide = false
+		}
+	} else if acceptable(string(ch)) {
+		fmt.Fprint(v, string(ch))
+		s = v.Buffer()
+		search(disp, s)
+		v.SetCursor(len(s)-1, 0)
+	}
+	// 	hv, _ := g.View("hosts")
+	// hv.Clear()
+	// for _, h := range disp {
+	// 	if !h.hide {
+	// 		fmt.Fprintln(hv, h.name)
+	// 	}
+	// }
 }
 
 func doGetTargets(hosts []string) []string {
@@ -241,7 +250,6 @@ func filter(g *ui.Gui, v *ui.View) error {
 }
 
 func doFilter(g *ui.Gui, v *ui.View) error {
-	v, _ = g.View("filter")
 	current = "hosts-cursor"
 	return nil
 }
@@ -282,7 +290,9 @@ func ssh(g *ui.Gui, v *ui.View) error {
 
 func sel(g *ui.Gui, v *ui.View) error {
 	_, cy := v.Cursor()
-	cursor = cy
+	v.Clear()
+	log.Println("sel", v.Name, cy)
+	disp[cy].selected = true
 	return nil
 }
 
