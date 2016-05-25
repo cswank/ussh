@@ -121,8 +121,8 @@ func layout(g *ui.Gui) error {
 			return err
 		}
 		v.Frame = false
-		v.FgColor = ui.ColorGreen
-		fmt.Fprint(v, "hosts:")
+		//v.FgColor = ui.ColorGreen
+		fmt.Fprint(v, "\033[37mhosts\033[37m\n")
 	}
 
 	if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
