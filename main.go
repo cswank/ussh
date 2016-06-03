@@ -4,19 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
 	ui "github.com/jroimartin/gocui"
+	"github.com/marpaia/chef-golang"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
 	g         *ui.Gui
 	query     = kingpin.Arg("query", "search string").String()
+	role      = kingpin.Flag("role", "chef role").Short('r').String()
 	addr      = os.Getenv("UPTIME_ADDR")
 	username  = os.Getenv("UPTIME_USER")
 	secret    = os.Getenv("UPTIME_KEY")
@@ -377,24 +377,51 @@ func login(targets []string) {
 // }
 
 func getHosts() []string {
-	q := strings.Replace(*query, "%", "%25", -1)
-	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, secret))
+
+	c, err := chef.Connect()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error:", err)
 	}
-	defer resp.Body.Close()
+	c.SSLNoVerify = true
 
-	var u uptime
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&u); err != nil {
-		log.Fatal(err)
-	}
-	hosts := make([]string, len(u.Results))
-
-	for i, x := range u.Results {
-		hosts[i] = x.Host
+	q := fmt.Sprintf("hostname:*%s*", *query)
+	if *role != "" {
+		q = fmt.Sprintf("%s AND role:*%s*", q, *role)
 	}
 
-	sort.Strings(hosts)
+	resp, err := c.Search("node", q)
+	if err != nil {
+		log.Fatal("search", err)
+	}
+
+	var hosts []string
+	for _, x := range resp.Rows {
+		var n chef.Node
+		json.Unmarshal(x, &n)
+		hosts = append(hosts, n.Name)
+	}
 	return hosts
 }
+
+// func getHosts() []string {
+// 	q := strings.Replace(*query, "%", "%25", -1)
+// 	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, secret))
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer resp.Body.Close()
+
+// 	var u uptime
+// 	dec := json.NewDecoder(resp.Body)
+// 	if err := dec.Decode(&u); err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	hosts := make([]string, len(u.Results))
+
+// 	for i, x := range u.Results {
+// 		hosts[i] = x.Host
+// 	}
+
+// 	sort.Strings(hosts)
+// 	return hosts
+// }
