@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -14,20 +15,20 @@ import (
 )
 
 var (
-	g         *ui.Gui
-	query     = kingpin.Arg("query", "search string").String()
-	role      = kingpin.Flag("role", "chef role").Short('r').String()
-	addr      = os.Getenv("UPTIME_ADDR")
-	username  = os.Getenv("UPTIME_USER")
-	secret    = os.Getenv("UPTIME_KEY")
-	current   string
-	hosts     []host
-	names     []string
-	chars     = "abcdefghijklmnopqrstuvwzyzABCDEFGHIJKLMNOPQRSTUVWZYZ1234567890.-,"
-	templates = map[string]string{
-		"green":  "\033[32m%s\033[37m\n",
-		"white":  "\033[37m%s\033[37m\n",
-		"yellow": "\033[33m%s\033[37m\n",
+	g        *ui.Gui
+	query    = kingpin.Arg("query", "search string").String()
+	role     = kingpin.Flag("role", "chef role").Short('r').String()
+	addr     = os.Getenv("UPTIME_ADDR")
+	username = os.Getenv("UPTIME_USER")
+	secret   = os.Getenv("UPTIME_KEY")
+	current  string
+	hosts    []host
+	names    []string
+	chars    = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.-,"
+	colors   = map[string]func(io.Writer, string){
+		"green":  func(w io.Writer, s string) { fmt.Fprintf(w, "\033[32m%s\033[37m\n", s) },
+		"white":  func(w io.Writer, s string) { fmt.Fprintf(w, "\033[37m%s\033[37m\n", s) },
+		"yellow": func(w io.Writer, s string) { fmt.Fprintf(w, "\033[33m%s\033[37m\n", s) },
 	}
 )
 
@@ -79,10 +80,6 @@ func search(pred string) {
 		}
 	}
 	hosts = out
-}
-
-func acceptable(s string) bool {
-	return strings.Index(chars, s) > -1
 }
 
 func makeHosts() []host {
@@ -203,13 +200,13 @@ func printHosts() {
 	hv.Clear()
 	_, cur := cv.Cursor()
 	for i, h := range hosts {
-		color := "green"
+		f := colors["green"]
 		if h.selected && i == cur {
-			color = "yellow"
+			f = colors["yellow"]
 		} else if h.selected || i == cur {
-			color = "white"
+			f = colors["white"]
 		}
-		fmt.Fprintf(hv, templates[color], h.name)
+		f(hv, h.name)
 	}
 }
 
@@ -237,6 +234,10 @@ func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
 		v.SetCursor(len(s)-1, 0)
 	}
 	printHosts()
+}
+
+func acceptable(s string) bool {
+	return strings.Index(chars, s) > -1
 }
 
 func doGetTargets(hosts []string) []string {
@@ -267,10 +268,7 @@ func filter(g *ui.Gui, v *ui.View) error {
 	v.Write([]byte(buf))
 	current = "filter"
 	l := len(buf)
-	err = v.SetCursor(l, 0)
-	maxX, maxY := v.Size()
-	log.Println("filter", l, buf, err, maxX, maxY)
-	return err
+	return v.SetCursor(l, 0)
 }
 
 func doFilter(g *ui.Gui, v *ui.View) error {
