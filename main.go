@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -10,40 +9,32 @@ import (
 	"strings"
 
 	ui "github.com/jroimartin/gocui"
-	"github.com/marpaia/chef-golang"
+	chef "github.com/marpaia/chef-golang"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	g        *ui.Gui
-	query    = kingpin.Arg("query", "search string").String()
-	role     = kingpin.Flag("role", "chef role").Short('r').String()
-	addr     = os.Getenv("UPTIME_ADDR")
-	username = os.Getenv("UPTIME_USER")
-	secret   = os.Getenv("UPTIME_KEY")
-	current  string
-	hosts    []host
-	names    []string
-	chars    = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.-,"
-	colors   = map[string]func(io.Writer, string){
+	g            *ui.Gui
+	query        = kingpin.Arg("query", "search string").String()
+	role         = kingpin.Flag("role", "chef role").Short('r').String()
+	addr         = os.Getenv("UPTIME_ADDR")
+	username     = os.Getenv("UPTIME_USER")
+	secret       = os.Getenv("UPTIME_KEY")
+	info         bool
+	current      string
+	nodes        []node
+	visibleNodes []node
+	chars        = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.-,"
+	colors       = map[string]func(io.Writer, string){
 		"green":  func(w io.Writer, s string) { fmt.Fprintf(w, "\033[32m%s\033[37m\n", s) },
 		"white":  func(w io.Writer, s string) { fmt.Fprintf(w, "\033[37m%s\033[37m\n", s) },
 		"yellow": func(w io.Writer, s string) { fmt.Fprintf(w, "\033[33m%s\033[37m\n", s) },
 	}
 )
 
-type host struct {
-	name     string
+type node struct {
+	node     chef.Node
 	selected bool
-}
-
-type result struct {
-	Host string `json:"fqdn"`
-}
-
-type uptime struct {
-	Message string   `json:"message"`
-	Results []result `json:"results"`
 }
 
 func init() {
@@ -53,7 +44,7 @@ func init() {
 
 func main() {
 	kingpin.Parse()
-	names = getHosts()
+	getNodes()
 	targets := getTargets()
 	login(targets)
 }
@@ -72,26 +63,12 @@ func search(pred string) {
 	my -= 5
 	pred = strings.TrimSpace(pred)
 	preds := strings.Split(pred, ",")
-
-	out := []host{}
-	for i, n := range names {
-		if i < my && inBoth(n, preds) {
-			out = append(out, host{name: n})
+	visibleNodes = []node{}
+	for i, n := range nodes {
+		if i < my && inBoth(n.node.Name, preds) {
+			visibleNodes = append(visibleNodes, n)
 		}
 	}
-	hosts = out
-}
-
-func makeHosts() []host {
-	_, my := g.Size()
-	my -= 5
-	var out []host
-	for i, h := range names {
-		if i < my {
-			out = append(out, host{name: h})
-		}
-	}
-	return out
 }
 
 func getTargets() []string {
@@ -99,8 +76,6 @@ func getTargets() []string {
 	if err := g.Init(); err != nil {
 		log.Panicln(err)
 	}
-
-	hosts = makeHosts()
 
 	g.FgColor = ui.ColorGreen
 
@@ -125,20 +100,30 @@ func getTargets() []string {
 		}
 	}
 	var out []string
-	for _, h := range hosts {
-		if h.selected {
-			out = append(out, h.name)
+	for _, n := range visibleNodes {
+		if n.selected {
+			out = append(out, n.node.Name)
 		}
 	}
 	return out
 }
 
-func layout(g *ui.Gui) error {
-	log.Println("layout")
-	x, _ := g.Size()
-	size := len(hosts)
+func getWidth() int {
+	var w int
+	for _, n := range nodes {
+		if len(n.node.Name) > w {
+			w = len(n.node.Name)
+		}
+	}
+	return w
+}
 
-	if v, err := g.SetView("hosts-label", -1, -1, x, 1); err != nil {
+func layout(g *ui.Gui) error {
+	x, _ := g.Size()
+	size := len(nodes)
+	width := getWidth()
+
+	if v, err := g.SetView("hosts-label", -1, -1, width+10, 1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -153,24 +138,17 @@ func layout(g *ui.Gui) error {
 		}
 		v.Highlight = true
 		v.Frame = false
-		for _, h := range hosts {
-			if h.selected {
-				fmt.Fprintln(v, "x")
-			} else {
-				fmt.Fprintln(v, " ")
-			}
-		}
 	}
 
-	if v, err := g.SetView("hosts", 6, 0, x, size+1); err != nil {
+	if v, err := g.SetView("hosts", 6, 0, width+4, size+1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
 		v.Frame = false
-		printHosts()
+		printNodes()
 	}
 
-	if v, err := g.SetView("filter-label", -1, size, x, size+2); err != nil {
+	if v, err := g.SetView("filter-label", -1, size, width+10, size+2); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -181,7 +159,7 @@ func layout(g *ui.Gui) error {
 		fmt.Fprintln(v, "filter: ")
 	}
 
-	if v, err := g.SetView("filter", 4, size+1, x, size+3); err != nil {
+	if v, err := g.SetView("filter", 4, size+1, width, size+3); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -191,27 +169,37 @@ func layout(g *ui.Gui) error {
 		v.Editable = true
 	}
 
+	if v, err := g.SetView("info", width+10, -1, x, 10); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.FgColor = ui.ColorGreen
+		v.Highlight = false
+		v.Frame = false
+		v.Editable = false
+		printInfo(v)
+	}
+
 	return g.SetCurrentView(current)
 }
 
-func printHosts() {
+func printNodes() {
 	hv, _ := g.View("hosts")
 	cv, _ := g.View("hosts-cursor")
 	hv.Clear()
 	_, cur := cv.Cursor()
-	for i, h := range hosts {
+	for i, n := range visibleNodes {
 		f := colors["green"]
-		if h.selected && i == cur {
+		if n.selected && i == cur {
 			f = colors["yellow"]
-		} else if h.selected || i == cur {
+		} else if n.selected || i == cur {
 			f = colors["white"]
 		}
-		f(hv, h.name)
+		f(hv, n.node.Name)
 	}
 }
 
 func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
-	log.Println("edit", key, ch, key == ui.KeyEnter)
 	if key == ui.KeyEnter {
 		cv, _ := g.View("hosts-cursor")
 		cv.SetCursor(0, 0)
@@ -226,31 +214,23 @@ func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
 		search(s)
 		v.SetCursor(len(s), 0)
 	} else if key == 127 && len(s) == 0 {
-		hosts = makeHosts()
+		unhideAll()
 	} else if acceptable(string(ch)) {
 		fmt.Fprint(v, string(ch))
 		s = v.Buffer()
 		search(s)
 		v.SetCursor(len(s)-1, 0)
 	}
-	printHosts()
+	printNodes()
+}
+
+func unhideAll() {
+	visibleNodes = make([]node, len(nodes))
+	copy(visibleNodes, nodes)
 }
 
 func acceptable(s string) bool {
 	return strings.Index(chars, s) > -1
-}
-
-func doGetTargets(hosts []string) []string {
-	var out []string
-	for _, targ := range hosts {
-		if strings.Index(targ, "hosts") == -1 {
-			h := strings.TrimSpace(targ)
-			if len(h) > 0 {
-				out = append(out, h)
-			}
-		}
-	}
-	return out
 }
 
 func quit(g *ui.Gui, v *ui.View) error {
@@ -277,8 +257,8 @@ func doFilter(g *ui.Gui, v *ui.View) error {
 }
 
 func sshAll(g *ui.Gui, v *ui.View) error {
-	for i := range hosts {
-		hosts[i].selected = true
+	for i := range visibleNodes {
+		visibleNodes[i].selected = true
 	}
 	return ui.ErrQuit
 }
@@ -286,32 +266,61 @@ func sshAll(g *ui.Gui, v *ui.View) error {
 func next(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
 	err := v.SetCursor(cx, cy+1)
-	printHosts()
+	printNodes()
+	iv, _ := g.View("info")
+	printInfo(iv)
 	return err
 }
 
 func prev(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
 	err := v.SetCursor(cx, cy-1)
-	printHosts()
+	printNodes()
+	iv, _ := g.View("info")
+	printInfo(iv)
 	return err
 }
 
 func ssh(g *ui.Gui, v *ui.View) error {
 	_, cy := v.Cursor()
-	hosts[cy].selected = true
+	visibleNodes[cy].selected = true
 	return ui.ErrQuit
 }
 
 func sel(g *ui.Gui, v *ui.View) error {
 	_, cy := v.Cursor()
-	if hosts[cy].selected {
-		hosts[cy].selected = false
+	if visibleNodes[cy].selected {
+		visibleNodes[cy].selected = false
 	} else {
-		hosts[cy].selected = true
+		visibleNodes[cy].selected = true
 	}
-	printHosts()
+	printNodes()
 	return nil
+}
+
+func showInfo(g *ui.Gui, v *ui.View) error {
+	v, _ = g.View("info")
+	if info {
+		v.Clear()
+		info = false
+	} else {
+		info = true
+		printInfo(v)
+	}
+	return nil
+}
+
+func printInfo(v *ui.View) {
+	if info {
+		v.Clear()
+		cv, _ := g.View("hosts-cursor")
+		_, cur := cv.Cursor()
+		n := visibleNodes[cur]
+		fmt.Fprintf(v, "Name: %s\n", n.node.Name)
+		fmt.Fprintf(v, "Environment: %s\n", n.node.Environment)
+		fmt.Fprintf(v, "JSONClass: %s\n", n.node.JSONClass)
+		fmt.Fprintf(v, "ChefType: %s\n", n.node.ChefType)
+	}
 }
 
 type key struct {
@@ -323,6 +332,7 @@ type key struct {
 
 var keys = []key{
 	{"", ui.KeyCtrlC, ui.ModNone, quit},
+	{"", ui.KeyCtrlI, ui.ModNone, showInfo},
 	{"", ui.KeyCtrlD, ui.ModNone, quit},
 	{"", ui.KeyCtrlA, ui.ModNone, sshAll},
 	{"", ui.KeyCtrlF, ui.ModNone, filter},
@@ -364,42 +374,43 @@ func login(targets []string) {
 	}
 }
 
-// func getHosts() []string {
-// 	f := []string{"p1", "s1"}
-// 	c := []string{"a", "b", "c", "d", "e"}
-// 	out := make([]string, len(c))
-// 	for i, x := range c {
-// 		out[i] = fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])
-// 	}
-// 	return out
-// }
-
-func getHosts() []string {
-
-	c, err := chef.Connect()
-	if err != nil {
-		log.Fatal("Error:", err)
+func getNodes() {
+	f := []string{"p1", "s1"}
+	c := []string{"a", "b", "c", "d", "e"}
+	nodes = make([]node, len(c))
+	visibleNodes = make([]node, len(c))
+	for i, x := range c {
+		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])}}
+		nodes[i] = n
+		visibleNodes[i] = n
 	}
-	c.SSLNoVerify = true
-
-	q := fmt.Sprintf("hostname:*%s*", *query)
-	if *role != "" {
-		q = fmt.Sprintf("%s AND role:*%s*", q, *role)
-	}
-
-	resp, err := c.Search("node", q)
-	if err != nil {
-		log.Fatal("search", err)
-	}
-
-	var hosts []string
-	for _, x := range resp.Rows {
-		var n chef.Node
-		json.Unmarshal(x, &n)
-		hosts = append(hosts, n.Name)
-	}
-	return hosts
 }
+
+// func getNodes() {
+
+// 	c, err := chef.Connect()
+// 	if err != nil {
+// 		log.Fatal("Error:", err)
+// 	}
+// 	c.SSLNoVerify = true
+
+// 	q := fmt.Sprintf("hostname:*%s*", *query)
+// 	if *role != "" {
+// 		q = fmt.Sprintf("%s AND role:*%s*", q, *role)
+// 	}
+
+// 	resp, err := c.Search("node", q)
+// 	if err != nil {
+// 		log.Fatal("search", err)
+// 	}
+
+// 	for _, x := range resp.Rows {
+// 		var n chef.Node
+// 		json.Unmarshal(x, &n)
+// 		nodes = append(nodes, node{node: n})
+// 		visibleNodes = append(visibleNodes, node{node: n})
+// 	}
+// }
 
 // func getHosts() []string {
 // 	q := strings.Replace(*query, "%", "%25", -1)
