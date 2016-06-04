@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -374,43 +375,43 @@ func login(targets []string) {
 	}
 }
 
-func getNodes() {
-	f := []string{"p1", "s1"}
-	c := []string{"a", "b", "c", "d", "e"}
-	nodes = make([]node, len(c))
-	visibleNodes = make([]node, len(c))
-	for i, x := range c {
-		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])}}
-		nodes[i] = n
-		visibleNodes[i] = n
-	}
-}
-
 // func getNodes() {
-
-// 	c, err := chef.Connect()
-// 	if err != nil {
-// 		log.Fatal("Error:", err)
-// 	}
-// 	c.SSLNoVerify = true
-
-// 	q := fmt.Sprintf("hostname:*%s*", *query)
-// 	if *role != "" {
-// 		q = fmt.Sprintf("%s AND role:*%s*", q, *role)
-// 	}
-
-// 	resp, err := c.Search("node", q)
-// 	if err != nil {
-// 		log.Fatal("search", err)
-// 	}
-
-// 	for _, x := range resp.Rows {
-// 		var n chef.Node
-// 		json.Unmarshal(x, &n)
-// 		nodes = append(nodes, node{node: n})
-// 		visibleNodes = append(visibleNodes, node{node: n})
+// 	f := []string{"p1", "s1"}
+// 	c := []string{"a", "b", "c", "d", "e"}
+// 	nodes = make([]node, len(c))
+// 	visibleNodes = make([]node, len(c))
+// 	for i, x := range c {
+// 		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])}}
+// 		nodes[i] = n
+// 		visibleNodes[i] = n
 // 	}
 // }
+
+func getNodes() {
+
+	c, err := chef.Connect()
+	if err != nil {
+		log.Fatal("Error:", err)
+	}
+	c.SSLNoVerify = true
+
+	q := fmt.Sprintf("hostname:*%s*", *query)
+	if *role != "" {
+		q = fmt.Sprintf("%s AND role:*%s*", q, *role)
+	}
+
+	resp, err := c.Search("node", q)
+	if err != nil {
+		log.Fatal("search", err)
+	}
+
+	for _, x := range resp.Rows {
+		var n chef.Node
+		json.Unmarshal(x, &n)
+		nodes = append(nodes, node{node: n})
+		visibleNodes = append(visibleNodes, node{node: n})
+	}
+}
 
 // func getHosts() []string {
 // 	q := strings.Replace(*query, "%", "%25", -1)
