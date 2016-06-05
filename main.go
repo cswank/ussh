@@ -19,9 +19,7 @@ var (
 	query        = kingpin.Arg("query", "search string").String()
 	fake         = kingpin.Flag("fake", "fake nodes").Short('f').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
-	addr         = os.Getenv("UPTIME_ADDR")
-	username     = os.Getenv("UPTIME_USER")
-	secret       = os.Getenv("UPTIME_KEY")
+	username     string
 	info         bool
 	current      string
 	nodes        []node
@@ -37,6 +35,14 @@ var (
 type node struct {
 	node     chef.Node
 	selected bool
+}
+
+func init() {
+	username = os.Getenv("USSH_USER")
+	if username == "" {
+		fmt.Println("please set the $USSH_USER env var to your ldap username.")
+		os.Exit(1)
+	}
 }
 
 func main() {
