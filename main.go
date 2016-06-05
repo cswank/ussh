@@ -210,6 +210,7 @@ func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
 		cv, _ := g.View("hosts-cursor")
 		cv.SetCursor(0, 0)
 		current = "hosts-cursor"
+		printNodes()
 		return
 	}
 	s := strings.TrimSpace(v.Buffer())
