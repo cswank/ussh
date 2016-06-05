@@ -17,6 +17,7 @@ import (
 var (
 	g            *ui.Gui
 	query        = kingpin.Arg("query", "search string").String()
+	fake         = kingpin.Flag("fake", "fake nodes").Short('f').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
 	addr         = os.Getenv("UPTIME_ADDR")
 	username     = os.Getenv("UPTIME_USER")
@@ -45,7 +46,11 @@ func init() {
 
 func main() {
 	kingpin.Parse()
-	getNodes()
+	if *fake {
+		getFakeNodes()
+	} else {
+		getNodes()
+	}
 	targets := getTargets()
 	login(targets)
 }
@@ -121,7 +126,7 @@ func getWidth() int {
 
 func layout(g *ui.Gui) error {
 	x, _ := g.Size()
-	size := len(nodes)
+	size := len(visibleNodes)
 	width := getWidth()
 
 	if v, err := g.SetView("hosts-label", -1, -1, width+10, 1); err != nil {
@@ -141,7 +146,7 @@ func layout(g *ui.Gui) error {
 		v.Frame = false
 	}
 
-	if v, err := g.SetView("hosts", 6, 0, width+4, size+1); err != nil {
+	if v, err := g.SetView("hosts", 6, 0, width+8, size+1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -170,7 +175,7 @@ func layout(g *ui.Gui) error {
 		v.Editable = true
 	}
 
-	if v, err := g.SetView("info", width+10, -1, x, 10); err != nil {
+	if v, err := g.SetView("info", width+10, 0, x, 10); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -266,6 +271,9 @@ func sshAll(g *ui.Gui, v *ui.View) error {
 
 func next(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
+	if cy+1 >= len(visibleNodes) {
+		return nil
+	}
 	err := v.SetCursor(cx, cy+1)
 	printNodes()
 	iv, _ := g.View("info")
@@ -275,6 +283,9 @@ func next(g *ui.Gui, v *ui.View) error {
 
 func prev(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
+	if cy-1 < 0 {
+		return nil
+	}
 	err := v.SetCursor(cx, cy-1)
 	printNodes()
 	iv, _ := g.View("info")
@@ -319,8 +330,6 @@ func printInfo(v *ui.View) {
 		n := visibleNodes[cur]
 		fmt.Fprintf(v, "Name: %s\n", n.node.Name)
 		fmt.Fprintf(v, "Environment: %s\n", n.node.Environment)
-		fmt.Fprintf(v, "JSONClass: %s\n", n.node.JSONClass)
-		fmt.Fprintf(v, "ChefType: %s\n", n.node.ChefType)
 	}
 }
 
@@ -375,17 +384,17 @@ func login(targets []string) {
 	}
 }
 
-// func getNodes() {
-// 	f := []string{"p1", "s1"}
-// 	c := []string{"a", "b", "c", "d", "e"}
-// 	nodes = make([]node, len(c))
-// 	visibleNodes = make([]node, len(c))
-// 	for i, x := range c {
-// 		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])}}
-// 		nodes[i] = n
-// 		visibleNodes[i] = n
-// 	}
-// }
+func getFakeNodes() {
+	f := []string{"p1", "s1"}
+	c := []string{"a", "b", "c", "d", "e"}
+	nodes = make([]node, len(c))
+	visibleNodes = make([]node, len(c))
+	for i, x := range c {
+		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])}}
+		nodes[i] = n
+		visibleNodes[i] = n
+	}
+}
 
 func getNodes() {
 
@@ -412,26 +421,3 @@ func getNodes() {
 		visibleNodes = append(visibleNodes, node{node: n})
 	}
 }
-
-// func getHosts() []string {
-// 	q := strings.Replace(*query, "%", "%25", -1)
-// 	resp, err := http.Get(fmt.Sprintf("%s/servers/search/%s/%s", addr, q, secret))
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer resp.Body.Close()
-
-// 	var u uptime
-// 	dec := json.NewDecoder(resp.Body)
-// 	if err := dec.Decode(&u); err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	hosts := make([]string, len(u.Results))
-
-// 	for i, x := range u.Results {
-// 		hosts[i] = x.Host
-// 	}
-
-// 	sort.Strings(hosts)
-// 	return hosts
-// }
