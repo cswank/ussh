@@ -39,11 +39,6 @@ type node struct {
 	selected bool
 }
 
-func init() {
-	f, _ := os.Create("/tmp/ussh")
-	log.SetOutput(f)
-}
-
 func main() {
 	kingpin.Parse()
 	if *fake {
@@ -240,6 +235,41 @@ func acceptable(s string) bool {
 	return strings.Index(chars, s) > -1
 }
 
+type key struct {
+	name string
+	key  interface{}
+	mod  ui.Modifier
+	f    ui.KeybindingHandler
+}
+
+var keys = []key{
+	{"", ui.KeyCtrlC, ui.ModNone, quit},
+	{"", ui.KeyCtrlD, ui.ModNone, quit},
+	{"", ui.KeyCtrlA, ui.ModNone, sshAll},
+	{"filter", ui.KeyEnter, ui.ModNone, exitFilter},
+	{"hosts-cursor", ui.KeyCtrlN, ui.ModNone, next},
+	{"hosts-cursor", 'n', ui.ModNone, next},
+	{"hosts-cursor", ui.KeyArrowDown, ui.ModNone, next},
+	{"hosts-cursor", ui.KeyCtrlP, ui.ModNone, prev},
+	{"hosts-cursor", 'p', ui.ModNone, prev},
+	{"hosts-cursor", ui.KeyArrowUp, ui.ModNone, prev},
+	{"hosts-cursor", ui.KeySpace, ui.ModNone, sel},
+	{"hosts-cursor", ui.KeyEnter, ui.ModNone, ssh},
+	{"hosts-cursor", ui.KeyCtrlI, ui.ModNone, showInfo},
+	{"hosts-cursor", 'i', ui.ModNone, showInfo},
+	{"hosts-cursor", ui.KeyCtrlF, ui.ModNone, filter},
+	{"hosts-cursor", 'f', ui.ModNone, filter},
+}
+
+func keybindings(g *ui.Gui) error {
+	for _, k := range keys {
+		if err := g.SetKeybinding(k.name, k.key, k.mod, k.f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func quit(g *ui.Gui, v *ui.View) error {
 	return ui.ErrQuit
 }
@@ -258,7 +288,7 @@ func filter(g *ui.Gui, v *ui.View) error {
 	return v.SetCursor(l, 0)
 }
 
-func doFilter(g *ui.Gui, v *ui.View) error {
+func exitFilter(g *ui.Gui, v *ui.View) error {
 	current = "hosts-cursor"
 	return nil
 }
@@ -334,35 +364,6 @@ func printInfo(v *ui.View) {
 	}
 }
 
-type key struct {
-	name string
-	key  interface{}
-	mod  ui.Modifier
-	f    ui.KeybindingHandler
-}
-
-var keys = []key{
-	{"", ui.KeyCtrlC, ui.ModNone, quit},
-	{"", ui.KeyCtrlI, ui.ModNone, showInfo},
-	{"", ui.KeyCtrlD, ui.ModNone, quit},
-	{"", ui.KeyCtrlA, ui.ModNone, sshAll},
-	{"", ui.KeyCtrlF, ui.ModNone, filter},
-	{"filter", ui.KeyEnter, ui.ModNone, doFilter},
-	{"hosts-cursor", ui.KeyCtrlN, ui.ModNone, next},
-	{"hosts-cursor", ui.KeyCtrlP, ui.ModNone, prev},
-	{"hosts-cursor", ui.KeySpace, ui.ModNone, sel},
-	{"hosts-cursor", ui.KeyEnter, ui.ModNone, ssh},
-}
-
-func keybindings(g *ui.Gui) error {
-	for _, k := range keys {
-		if err := g.SetKeybinding(k.name, k.key, k.mod, k.f); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func login(targets []string) {
 	if len(targets) == 1 && targets[0] != "" {
 		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, targets[0]))
@@ -387,18 +388,18 @@ func login(targets []string) {
 
 func getFakeNodes() {
 	f := []string{"p1", "s1"}
+	e := []string{"prod", "staging"}
 	c := []string{"a", "b", "c", "d", "e"}
 	nodes = make([]node, len(c))
 	visibleNodes = make([]node, len(c))
 	for i, x := range c {
-		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2])}}
+		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2]), Environment: e[i%2]}}
 		nodes[i] = n
 		visibleNodes[i] = n
 	}
 }
 
 func getNodes() {
-
 	c, err := chef.Connect()
 	if err != nil {
 		log.Fatal("Error:", err)
