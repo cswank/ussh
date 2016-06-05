@@ -157,7 +157,7 @@ func layout(g *ui.Gui) error {
 		v.Highlight = false
 		v.Frame = false
 		v.Editable = false
-		fmt.Fprintln(v, "filter: ")
+		fmt.Fprintln(v, "filter")
 	}
 
 	if v, err := g.SetView("filter", 4, size+1, width, size+3); err != nil {
