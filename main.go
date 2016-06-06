@@ -25,11 +25,9 @@ var (
 	nodes        []node
 	visibleNodes []node
 	chars        = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.-,"
-	colors       = map[string]func(io.Writer, string){
-		"green":  func(w io.Writer, s string) { fmt.Fprintf(w, "\033[32m%s\033[37m\n", s) },
-		"white":  func(w io.Writer, s string) { fmt.Fprintf(w, "\033[37m%s\033[37m\n", s) },
-		"yellow": func(w io.Writer, s string) { fmt.Fprintf(w, "\033[33m%s\033[37m\n", s) },
-	}
+	colors       map[string]func(io.Writer, string)
+	hostLabel    string
+	filterLabel  string
 )
 
 type node struct {
@@ -43,6 +41,8 @@ func init() {
 		fmt.Println("please set the $USSH_USER env var to your ldap username.")
 		os.Exit(1)
 	}
+
+	setupColors()
 }
 
 func main() {
@@ -136,7 +136,7 @@ func layout(g *ui.Gui) error {
 		}
 		v.Frame = false
 		//v.FgColor = ui.ColorGreen
-		fmt.Fprint(v, "\033[37mhosts\033[37m\n")
+		fmt.Fprint(v, hostLabel)
 	}
 
 	if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
@@ -163,7 +163,7 @@ func layout(g *ui.Gui) error {
 		v.Highlight = false
 		v.Frame = false
 		v.Editable = false
-		fmt.Fprintln(v, "filter")
+		fmt.Fprintln(v, filterLabel)
 	}
 
 	if v, err := g.SetView("filter", 4, size+1, width, size+3); err != nil {
@@ -196,11 +196,11 @@ func printNodes() {
 	hv.Clear()
 	_, cur := cv.Cursor()
 	for i, n := range visibleNodes {
-		f := colors["green"]
+		f := colors["color1"]
 		if n.selected && i == cur {
-			f = colors["yellow"]
+			f = colors["color3"]
 		} else if n.selected || i == cur {
-			f = colors["white"]
+			f = colors["color2"]
 		}
 		f(hv, n.node.Name)
 	}
@@ -428,4 +428,47 @@ func getNodes() {
 		nodes = append(nodes, node{node: n})
 		visibleNodes = append(visibleNodes, node{node: n})
 	}
+}
+
+func setupColors() {
+	m := map[string]string{
+		"black":   "30",
+		"red":     "31",
+		"green":   "32",
+		"yellow":  "33",
+		"blue":    "34",
+		"magenta": "35",
+		"cyan":    "36",
+		"white":   "37",
+	}
+
+	color1 := os.Getenv("USSH_COLOR_1")
+	if color1 == "" {
+		color1 = "green"
+	}
+	color2 := os.Getenv("USSH_COLOR_2")
+	if color2 == "" {
+		color2 = "white"
+	}
+	color3 := os.Getenv("USSH_COLOR_3")
+	if color3 == "" {
+		color3 = "yellow"
+	}
+
+	colors = map[string]func(io.Writer, string){
+		"color1": func(w io.Writer, s string) {
+			fmt.Fprintf(w, fmt.Sprintf("\033[%sm%%s\033[%sm\n", m[color1], m[color1]), s)
+		},
+
+		"color2": func(w io.Writer, s string) {
+			fmt.Fprintf(w, fmt.Sprintf("\033[%sm%%s\033[%sm\n", m[color2], m[color1]), s)
+		},
+
+		"color3": func(w io.Writer, s string) {
+			fmt.Fprintf(w, fmt.Sprintf("\033[%sm%%s\033[%sm\n", m[color3], m[color1]), s)
+		},
+	}
+
+	hostLabel = fmt.Sprintf("\033[%smhosts\033[%sm\n", m[color2], m[color1])
+	filterLabel = fmt.Sprintf("\033[%smfilter\033[%sm\n", m[color2], m[color1])
 }
