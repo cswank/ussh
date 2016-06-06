@@ -422,6 +422,11 @@ func getNodes() {
 		log.Fatal("search", err)
 	}
 
+	if len(resp.Rows) == 0 {
+		fmt.Printf("No nodes found with query %s, please try again with a different search\n", *query)
+		os.Exit(0)
+	}
+
 	for _, x := range resp.Rows {
 		var n chef.Node
 		json.Unmarshal(x, &n)
