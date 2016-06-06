@@ -18,12 +18,27 @@ Usage
 
 In order to use it you must set
 
-    export UPTIME_ADDR=https://uptime.ops.sendgrid.net/api
-    export UPTIME_KEY=<the uptime secret key (see https://uptime.ops.sendgrid.net to get the key)>
-    export UPTIME_USER=<your ldap username>
+    export USSH_USER=<your ldap username>
 
-Optional, if you use a light background terminal:
-    export UPTIME_THEME=light
+Also, this will read your ~/.chef/knife.rb file.  However, it won't
+do the ruby string substitutions, so you will have to change
+
+    client_key "#{home_dir}/.chef/sendgrid.pem"
+
+to
+    
+    client_key "/Users/<username>/.chef/sendgrid.pem"
+
+If you don't like the colors you can play witb the three
+that are used by setting, for example:
+
+    export USSH_COLOR_1=blue
+    export USSH_COLOR_2=red
+    export USSH_COLOR_2=magenta
+
+The choices are black, red, green, yellow, blue, magenta,
+cyan, and white.
+    
 
 Then type, for example
 
@@ -31,18 +46,7 @@ Then type, for example
 
 A menu will pop up:
 
-    ┌sesults (C-d to exit)─────────────────────┐
-    │1  senderidentity0001s1mdw1.sendgrid.net  │
-    │2  senderidentity0001p1mdw1.sendgrid.net  │
-    │3  senderidentity0002s1mdw1.sendgrid.net  │
-    │4  senderidentity0002p1mdw1.sendgrid.net  │
-    └──────────────────────────────────────────┘
-    ┌filter (C-f)───────────────────────────┐
-    │                                       │
-    └───────────────────────────────────────┘
-    ┌ssh to (enter number)──────────────────┐
-    │                                       │
-    └───────────────────────────────────────┘
+
 
 Type control-f to filter the results down:
 
