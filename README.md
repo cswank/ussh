@@ -45,7 +45,7 @@ Then type, for example
 
 A menu will pop up:
 
-    <img src="https://raw.githubusercontent.com/cswank/ussh/master/docs/images/screenshot1.png" width="100"/>
+    <a><img src="https://raw.githubusercontent.com/cswank/ussh/master/docs/images/screenshot1.png" width="100"></a>
 
 
 In order to quit without logging into anything type control-d.
