@@ -3,7 +3,7 @@ USSH
 
 Description
 ===========
-Ussh searches for servers using uptime.  If you select a server
+Ussh searches for servers using the chef api.  If you select a server
 from the menu it logs you into that server.
 
 Install
