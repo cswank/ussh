@@ -11,7 +11,7 @@ Install
 
     git clone http://github.com/cswank/ussh
     cd ussh
-    godep go install
+    go install
 
 Usage
 =====
