@@ -393,13 +393,13 @@ func login(targets []string) {
 }
 
 func getFakeNodes() {
-	f := []string{"p1", "s1"}
+	f := []string{".com", ".net"}
 	e := []string{"prod", "staging"}
-	c := []string{"a", "b", "c", "d", "e"}
+	c := []string{"server1", "server2", "server3", "server4", "server5"}
 	nodes = make([]node, len(c))
 	visibleNodes = make([]node, len(c))
 	for i, x := range c {
-		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", strings.Repeat(x, 10), f[i%2]), Environment: e[i%2]}}
+		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", x, f[i%2]), Environment: e[i%2]}}
 		nodes[i] = n
 		visibleNodes[i] = n
 	}

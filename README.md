@@ -45,30 +45,8 @@ Then type, for example
 
 A menu will pop up:
 
-    hosts
-       senderidentity0001s1mdw1.sendgrid.net
-       senderidentity0002s1mdw1.sendgrid.net
-       senderidentity0001p1mdw1.sendgrid.net
-       senderidentity0002p1mdw1.sendgrid.net
-    filter
+![screen shot 1](https://github.com/cswank/raw/master/docs/images/screenshot1.png "")
 
-Type control-f to filter the results down:
-
-    ┌sesults (C-d to exit)─────────────────────┐
-    │1  senderidentity0001p1mdw1.sendgrid.net  │
-    │2  senderidentity0002p1mdw1.sendgrid.net  │
-    │                                          │
-    │                                          │
-    └──────────────────────────────────────────┘
-    ┌Filter (C-f)───────────────────────────┐
-    │p1                                     │
-    └───────────────────────────────────────┘
-    ┌ssh to (enter number)──────────────────┐
-    │                                       │
-    └───────────────────────────────────────┘
-
-Type the number you want to ssh into (and hit enter) and you have a session.
-Exit the session as normal (control-d or exit).
 
 In order to quit without logging into anything type control-d.
 
