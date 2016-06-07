@@ -45,7 +45,7 @@ Then type, for example
 
 A menu will pop up:
 
-    ![](https://raw.githubusercontent.com/cswank/ussh/master/docs/images/screenshot1.png | width=100)
+    ![](https://raw.githubusercontent.com/cswank/ussh/master/docs/images/screenshot1.png | width="100")
 
 
 In order to quit without logging into anything type control-d.
