@@ -23,11 +23,11 @@ In order to use it you must set
 Also, this will read your ~/.chef/knife.rb file.  However, it won't
 do the ruby string substitutions, so you will have to change
 
-    client_key "#{home_dir}/.chef/sendgrid.pem"
+    client_key "#{home_dir}/.chef/somepem.pem"
 
 to
     
-    client_key "/Users/<username>/.chef/sendgrid.pem"
+    client_key "/Users/<username>/.chef/somepem.pem"
 
 If you don't like the colors you can play witb the three
 that are used by setting, for example:
