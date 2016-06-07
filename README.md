@@ -71,6 +71,11 @@ the node list.
 
 <img src="./docs/images/screenshot4.png" width="620"/>
 
+Search terms can be separated by a comma.  The filter terms will be
+ANDed together.
+
+<img src="./docs/images/screenshot5.png" width="620"/>
+
 Another way to get a more refined list of nodes is to use a --role
 argument when starting ussh:
 
