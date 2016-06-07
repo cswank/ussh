@@ -34,7 +34,7 @@ that are used by setting, for example:
 
     export USSH_COLOR_1=blue
     export USSH_COLOR_2=red
-    export USSH_COLOR_2=magenta
+    export USSH_COLOR_3=magenta
 
 The choices are black, red, green, yellow, blue, magenta,
 cyan, and white.
