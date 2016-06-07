@@ -45,7 +45,7 @@ Then type, for example
 
 A menu will pop up:
 
-![](./docs/images/screenshot1.png =100x)
+<img src="./docs/images/screenshot1.png" style="width:140px;"/>
 
 In order to quit without logging into anything type control-d.
 
