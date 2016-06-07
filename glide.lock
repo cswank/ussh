@@ -1,0 +1,20 @@
+hash: 1c222a82e526f0f393152e79746733dbdd4e5e4bd31e7e430860f5e5426255bd
+updated: 2016-06-07T16:20:16.884269246-06:00
+imports:
+- name: github.com/alecthomas/template
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+  subpackages:
+  - parse
+- name: github.com/alecthomas/units
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+- name: github.com/jroimartin/gocui
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+- name: github.com/marpaia/chef-golang
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+- name: github.com/mattn/go-runewidth
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+- name: github.com/nsf/termbox-go
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+- name: gopkg.in/alecthomas/kingpin.v2
+  version: c643e2b73b8d4088e19fee0f6c38a4fce9ce2851
+devImports: []
