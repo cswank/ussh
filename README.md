@@ -38,15 +38,19 @@ that are used by setting, for example:
 
 The choices are black, red, green, yellow, blue, magenta,
 cyan, and white.
-    
-
+  
 Then type, for example
 
     ussh sender
 
 A menu will pop up:
 
-
+    hosts
+       senderidentity0001s1mdw1.sendgrid.net
+       senderidentity0002s1mdw1.sendgrid.net
+       senderidentity0001p1mdw1.sendgrid.net
+       senderidentity0002p1mdw1.sendgrid.net
+    filter
 
 Type control-f to filter the results down:
 
