@@ -17,7 +17,8 @@ import (
 var (
 	g            *ui.Gui
 	query        = kingpin.Arg("query", "search string").String()
-	fake         = kingpin.Flag("fake", "fake nodes").Short('f').Bool()
+	filterStr    = kingpin.Flag("filter", "filter string").Short('f').String()
+	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
 	username     string
 	info         bool
@@ -174,6 +175,11 @@ func layout(g *ui.Gui) error {
 		v.Highlight = false
 		v.Frame = false
 		v.Editable = true
+		if *filterStr != "" {
+			search(*filterStr)
+			fmt.Fprintln(v, *filterStr)
+			*filterStr = ""
+		}
 	}
 
 	if v, err := g.SetView("info", width+10, 0, x, 10); err != nil {
