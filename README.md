@@ -76,8 +76,12 @@ ANDed together.
 
 <img src="./docs/images/screenshot5.png" width="620"/>
 
+You can also pass a filter string in when you start the app:
+
+    ussh server -f .com
+
 Another way to get a more refined list of nodes is to use a --role
-argument when starting ussh:
+argument when starting ussh (chef role, that is):
 
     ussh server --role teamA
 

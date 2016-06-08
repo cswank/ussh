@@ -127,7 +127,7 @@ func getWidth() int {
 }
 
 func layout(g *ui.Gui) error {
-	x, _ := g.Size()
+	x, y := g.Size()
 	size := len(visibleNodes)
 	width := getWidth()
 
@@ -182,7 +182,7 @@ func layout(g *ui.Gui) error {
 		}
 	}
 
-	if v, err := g.SetView("info", width+10, 0, x, 10); err != nil {
+	if v, err := g.SetView("info", width+10, 0, x, y); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -373,6 +373,46 @@ func printInfo(v *ui.View) {
 		n := visibleNodes[cur]
 		fmt.Fprintf(v, "Name: %s\n", n.node.Name)
 		fmt.Fprintf(v, "Environment: %s\n", n.node.Environment)
+		fmt.Fprintf(v, "IP: %s\n", n.node.Info.IPAddress)
+		fmt.Fprintf(v, "MAC: %s\n", n.node.Info.MACAddress)
+		fmt.Fprintf(v, "Uptime: %s\n", n.node.Info.Uptime)
+		printMemory(v, n.node)
+		printFilesystem(v, n.node)
+		printCPU(v, n.node)
+	}
+}
+
+func printMemory(v *ui.View, n chef.Node) {
+	fmt.Fprint(v, "Memory:\n")
+	fmt.Fprintf(v, "  active: %s\n", n.Info.Memory["active"])
+	fmt.Fprintf(v, "  free: %s\n", n.Info.Memory["free"])
+	fmt.Fprintf(v, "  inactive: %s\n", n.Info.Memory["inactive"])
+}
+
+func printFilesystem(v *ui.View, n chef.Node) {
+	fmt.Fprint(v, "Filesystem:\n")
+	for k, val := range n.Info.Filesystem {
+		if strings.Index(k, "/dev") > -1 {
+			fmt.Fprintf(v, "  %s\n", k)
+			fmt.Fprintf(v, "    Size: %v\n", val.KBSize)
+			fmt.Fprintf(v, "    Used: %v\n", val.KBUsed)
+			fmt.Fprintf(v, "    Available: %v\n", val.KBavailable)
+			fmt.Fprintf(v, "    PercentUsed: %v\n", val.PercentUsed)
+		}
+	}
+}
+
+func printCPU(v *ui.View, n chef.Node) {
+	fmt.Fprint(v, "CPU: \n")
+	for k, val := range n.Info.CPU {
+		if k == "cores" {
+			fmt.Fprintf(v, "  %s\n", k)
+			fmt.Fprintf(v, "    Cores: %v\n", val)
+		}
+
+		if k == "cores" {
+			fmt.Fprintf(v, "    Cores: %v\n", val)
+		}
 	}
 }
 
