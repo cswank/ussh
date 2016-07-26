@@ -9,10 +9,8 @@ from the menu it logs you into that server.
 Install
 =======
 
-    git clone http://github.com/cswank/ussh
-    cd ussh
-    go install
-
+    go get github.com/cswank/ussh
+    
 Usage
 =====
 
