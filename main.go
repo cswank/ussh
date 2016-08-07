@@ -42,7 +42,6 @@ func init() {
 		fmt.Println("please set the $USSH_USER env var to your ldap username.")
 		os.Exit(1)
 	}
-
 	setupColors()
 }
 
@@ -85,8 +84,6 @@ func getTargets() []string {
 		log.Panicln(err)
 	}
 
-	g.FgColor = ui.ColorGreen
-
 	current = "hosts-cursor"
 
 	g.Editor = ui.EditorFunc(edit)
@@ -98,8 +95,6 @@ func getTargets() []string {
 	}
 
 	g.SetLayout(layout)
-
-	g.SelFgColor = ui.ColorGreen
 	g.Cursor = true
 
 	if err := g.MainLoop(); err != nil {
@@ -124,6 +119,36 @@ func getWidth() int {
 		}
 	}
 	return w
+}
+
+func showHelp(g *ui.Gui, v *ui.View) error {
+	x, y := g.Size()
+	if v, err := g.SetView("help", -1, -1, x, y); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		fmt.Fprint(v, "  help\n\n")
+		fmt.Fprint(v, "	   C-f: Enter filter mode (hit enter to exit filter mode)\n")
+		fmt.Fprint(v, "	   C-a: Csshx to all visible hosts\n")
+		fmt.Fprint(v, "	   Enter: Ssh to the highlighted host(s)\n")
+		fmt.Fprint(v, "	   Space: Toggle select the host on the current line\n")
+		fmt.Fprint(v, "	   C-i: Show info for the current host\n")
+		fmt.Fprint(v, "	   C-d: Quit without sshing\n")
+		fmt.Fprint(v, "	   n: Move cursor to the next host (down arrow does same thing)\n")
+		fmt.Fprint(v, "	   p: Move cursor to the previous host (up arrow does same thing)\n")
+		fmt.Fprint(v, "	   q: Exit the help screen\n")
+		current = "help"
+		v.Editable = false
+	}
+	return g.SetCurrentView("help")
+}
+
+func exitHelp(g *ui.Gui, v *ui.View) error {
+	if current != "help" {
+		return nil
+	}
+	current = "hosts-cursor"
+	return g.DeleteView("help")
 }
 
 func layout(g *ui.Gui) error {
@@ -258,6 +283,7 @@ var keys = []key{
 	{"", ui.KeyCtrlC, ui.ModNone, quit},
 	{"", ui.KeyCtrlD, ui.ModNone, quit},
 	{"", ui.KeyCtrlA, ui.ModNone, sshAll},
+	{"", 'q', ui.ModNone, exitHelp},
 	{"filter", ui.KeyEnter, ui.ModNone, exitFilter},
 	{"hosts-cursor", ui.KeyCtrlN, ui.ModNone, next},
 	{"hosts-cursor", 'n', ui.ModNone, next},
@@ -271,6 +297,8 @@ var keys = []key{
 	{"hosts-cursor", 'i', ui.ModNone, showInfo},
 	{"hosts-cursor", ui.KeyCtrlF, ui.ModNone, filter},
 	{"hosts-cursor", 'f', ui.ModNone, filter},
+	{"hosts-cursor", ui.KeyCtrlH, ui.ModNone, showHelp},
+	{"hosts-cursor", 'h', ui.ModNone, showHelp},
 }
 
 func keybindings(g *ui.Gui) error {
