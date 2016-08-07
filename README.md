@@ -85,4 +85,8 @@ argument when starting ussh (chef role, that is):
 
 In order to quit without logging into anything type control-d.
 
+Type 'h' to see the help screen:
+
+<img src="./docs/images/help.png" width="620"/>
+
 
