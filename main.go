@@ -127,16 +127,17 @@ func showHelp(g *ui.Gui, v *ui.View) error {
 		if err != ui.ErrUnknownView {
 			return err
 		}
-		fmt.Fprint(v, "  help\n\n")
-		fmt.Fprint(v, "	   C-f: Enter filter mode (hit enter to exit filter mode)\n")
-		fmt.Fprint(v, "	   C-a: Csshx to all visible hosts\n")
-		fmt.Fprint(v, "	   Enter: Ssh to the highlighted host(s)\n")
-		fmt.Fprint(v, "	   Space: Toggle select the host on the current line\n")
-		fmt.Fprint(v, "	   C-i: Show info for the current host\n")
-		fmt.Fprint(v, "	   C-d: Quit without sshing\n")
-		fmt.Fprint(v, "	   n: Move cursor to the next host (down arrow does same thing)\n")
-		fmt.Fprint(v, "	   p: Move cursor to the previous host (up arrow does same thing)\n")
-		fmt.Fprint(v, "	   q: Exit the help screen\n")
+		f := colors["color2"]
+		f(v, "  help\n")
+		f(v, "	   C-f: Enter filter mode (hit enter to exit filter mode)")
+		f(v, "	   C-a: Csshx to all visible hosts")
+		f(v, "	   Enter: Ssh to the highlighted host(s)")
+		f(v, "	   Space: Toggle select the host on the current line")
+		f(v, "	   C-i: Show info for the current host")
+		f(v, "	   C-d: Quit without sshing")
+		f(v, "	   n: Move cursor to the next host (down arrow does same thing)")
+		f(v, "	   p: Move cursor to the previous host (up arrow does same thing)")
+		f(v, "	   q: Exit the help screen")
 		current = "help"
 		v.Editable = false
 	}
