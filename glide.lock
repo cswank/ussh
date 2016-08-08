@@ -1,22 +1,22 @@
-hash: 9d2fb4c03164b0a3021f2768aa4ce9887d0ded8efca0c056c6aacaaac02d2006
-updated: 2016-08-08T07:38:38.460955831-06:00
+hash: a063aeb077f043b6f385f4abfe725eecc87f6a179f453f3795e5e7cbafffba59
+updated: 2016-08-08T08:09:49.257186366-06:00
 imports:
 - name: github.com/alecthomas/template
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
   subpackages:
   - parse
 - name: github.com/alecthomas/units
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
 - name: github.com/atotto/clipboard
   version: bb272b845f1112e10117e3e45ce39f690c0001ad
 - name: github.com/jroimartin/gocui
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
 - name: github.com/marpaia/chef-golang
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
 - name: github.com/mattn/go-runewidth
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
 - name: github.com/nsf/termbox-go
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
 - name: gopkg.in/alecthomas/kingpin.v2
-  version: 909a1e8b2353ec53436b760c1a76007ab56b9ad6
-testImports: []
+  version: bceaa63e6f72dc5df817bb141441700844b3a15c
+devImports: []

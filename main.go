@@ -139,6 +139,7 @@ func showHelp(g *ui.Gui, v *ui.View) error {
 		f(v, "	   n: Move cursor to the next host (down arrow does same thing)")
 		f(v, "	   p: Move cursor to the previous host (up arrow does same thing)")
 		f(v, "	   c: Copy the current host to the clipboard")
+		f(v, "	   C: Copy the current host to the clipboard with 'USSH_USER@' appended to the host")
 		f(v, "	   q: Exit the help screen")
 		current = "help"
 		v.Editable = false
@@ -164,7 +165,6 @@ func layout(g *ui.Gui) error {
 			return err
 		}
 		v.Frame = false
-		//v.FgColor = ui.ColorGreen
 		fmt.Fprint(v, hostLabel)
 	}
 
@@ -304,6 +304,7 @@ var keys = []key{
 	{"hosts-cursor", 'h', ui.ModNone, showHelp},
 	{"hosts-cursor", ui.KeyCtrlC, ui.ModNone, copyToClipboard},
 	{"hosts-cursor", 'c', ui.ModNone, copyToClipboard},
+	{"hosts-cursor", 'C', ui.ModNone, copyToClipboardWithUsername},
 }
 
 func keybindings(g *ui.Gui) error {
@@ -324,6 +325,13 @@ func copyToClipboard(g *ui.Gui, v *ui.View) error {
 	_, cur := cv.Cursor()
 	n := visibleNodes[cur]
 	return clipboard.WriteAll(n.node.Name)
+}
+
+func copyToClipboardWithUsername(g *ui.Gui, v *ui.View) error {
+	cv, _ := g.View("hosts-cursor")
+	_, cur := cv.Cursor()
+	n := visibleNodes[cur]
+	return clipboard.WriteAll(fmt.Sprintf("%s@%s", username, n.node.Name))
 }
 
 func filter(g *ui.Gui, v *ui.View) error {
