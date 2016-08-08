@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	ui "github.com/jroimartin/gocui"
 	chef "github.com/marpaia/chef-golang"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -137,6 +138,7 @@ func showHelp(g *ui.Gui, v *ui.View) error {
 		f(v, "	   C-d: Quit without sshing")
 		f(v, "	   n: Move cursor to the next host (down arrow does same thing)")
 		f(v, "	   p: Move cursor to the previous host (up arrow does same thing)")
+		f(v, "	   c: Copy the current host to the clipboard")
 		f(v, "	   q: Exit the help screen")
 		current = "help"
 		v.Editable = false
@@ -300,6 +302,8 @@ var keys = []key{
 	{"hosts-cursor", 'f', ui.ModNone, filter},
 	{"hosts-cursor", ui.KeyCtrlH, ui.ModNone, showHelp},
 	{"hosts-cursor", 'h', ui.ModNone, showHelp},
+	{"hosts-cursor", ui.KeyCtrlC, ui.ModNone, copyToClipboard},
+	{"hosts-cursor", 'c', ui.ModNone, copyToClipboard},
 }
 
 func keybindings(g *ui.Gui) error {
@@ -313,6 +317,13 @@ func keybindings(g *ui.Gui) error {
 
 func quit(g *ui.Gui, v *ui.View) error {
 	return ui.ErrQuit
+}
+
+func copyToClipboard(g *ui.Gui, v *ui.View) error {
+	cv, _ := g.View("hosts-cursor")
+	_, cur := cv.Cursor()
+	n := visibleNodes[cur]
+	return clipboard.WriteAll(n.node.Name)
 }
 
 func filter(g *ui.Gui, v *ui.View) error {
