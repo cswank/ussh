@@ -83,11 +83,11 @@ argument when starting ussh (chef role, that is):
 
     ussh server --role teamA
 
-You can type 'c' to copy the current host to your clipboard.
+You can type 'c' to copy the current host to your clipboard.  Also, you
+can type 'C' to copy the current host to your clipboard with USSH_USER@
+prepended.
 
 In order to quit without logging into anything type control-d.
-
-
 
 Type 'h' to see the help screen:
 

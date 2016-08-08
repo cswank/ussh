@@ -139,7 +139,7 @@ func showHelp(g *ui.Gui, v *ui.View) error {
 		f(v, "	   n: Move cursor to the next host (down arrow does same thing)")
 		f(v, "	   p: Move cursor to the previous host (up arrow does same thing)")
 		f(v, "	   c: Copy the current host to the clipboard")
-		f(v, "	   C: Copy the current host to the clipboard with 'USSH_USER@' appended to the host")
+		f(v, "	   C: Copy the current host to the clipboard with 'USSH_USER@' prepended to the host")
 		f(v, "	   q: Exit the help screen")
 		current = "help"
 		v.Editable = false
