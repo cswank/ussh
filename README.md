@@ -41,6 +41,12 @@ Then type, for example
 
     ussh server
 
+Type 'h' to see the help screen:
+
+<img src="./docs/images/help.png" width="620"/>
+
+Type 'q' to exit the help screen.
+
 A menu will pop up that will contain all nodes with the word
 'server' in their name.
 
@@ -88,9 +94,5 @@ can type 'C' to copy the current host to your clipboard with USSH_USER@
 prepended.
 
 In order to quit without logging into anything type control-d.
-
-Type 'h' to see the help screen:
-
-<img src="./docs/images/help.png" width="620"/>
 
 
