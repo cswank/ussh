@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/atotto/clipboard"
 	ui "github.com/jroimartin/gocui"
@@ -21,6 +22,7 @@ var (
 	filterStr    = kingpin.Flag("filter", "filter string").Short('f').String()
 	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
+	scp          = kingpin.Flag("scp", "file to scp").Short('s').String()
 	username     string
 	info         bool
 	current      string
@@ -54,7 +56,11 @@ func main() {
 		getNodes()
 	}
 	targets := getTargets()
-	login(targets)
+	if *scp != "" {
+		scpToTargets(targets)
+	} else {
+		login(targets)
+	}
 }
 
 func inBoth(h string, preds []string) bool {
@@ -110,6 +116,49 @@ func getTargets() []string {
 		}
 	}
 	return out
+}
+
+func scpToTargets(targets []string) {
+	g = ui.NewGui()
+	if err := g.Init(); err != nil {
+		log.Panicln(err)
+	}
+
+	defer g.Close()
+
+	var wg sync.WaitGroup
+
+	g.SetLayout(func(g *ui.Gui) error {
+		x, _ := g.Size()
+
+		for i, t := range targets {
+			if v, err := g.SetView(t, -1, i*2, x, i*2+2); err != nil {
+				if err != ui.ErrUnknownView {
+					return err
+				}
+				v.Frame = false
+				v.Autoscroll = true
+				fmt.Fprintf(v, "%s\n", t)
+				wg.Add(1)
+			}
+		}
+		return nil
+	})
+
+	go wait(&wg)
+
+	if err := g.MainLoop(); err != nil {
+		if err != ui.ErrQuit {
+			log.Fatal(err)
+		}
+	}
+}
+
+func wait(wg *sync.WaitGroup) {
+	wg.Wait()
+	g.Execute(func(g *ui.Gui) error {
+		return ui.ErrQuit
+	})
 }
 
 func getWidth() int {
@@ -484,6 +533,24 @@ func login(targets []string) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func doScp(target string, wg *sync.WaitGroup) {
+	g.Execute(func(g *ui.Gui) error {
+		v, err := g.View(target)
+		if err != nil {
+			return err
+		}
+		cmd := exec.Command("scp", *scp, fmt.Sprintf("%s@%s:", username, target))
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = v
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		wg.Done()
+		return nil
+	})
 }
 
 func getFakeNodes() {
