@@ -56,11 +56,7 @@ func main() {
 		getNodes()
 	}
 	targets := getTargets()
-	if *scp != "" {
-		scpToTargets(targets)
-	} else {
-		login(targets)
-	}
+	login(targets)
 }
 
 func inBoth(h string, preds []string) bool {
@@ -118,19 +114,18 @@ func getTargets() []string {
 	return out
 }
 
-func scpToTargets(targets []string) {
-	g = ui.NewGui()
-	if err := g.Init(); err != nil {
-		log.Panicln(err)
+func scpToTargets(g *ui.Gui, v *ui.View) error {
+	var targets []string
+	for _, n := range visibleNodes {
+		if n.selected {
+			targets = append(targets, n.node.Name)
+		}
 	}
-
-	defer g.Close()
 
 	var wg sync.WaitGroup
 
 	g.SetLayout(func(g *ui.Gui) error {
 		x, _ := g.Size()
-
 		for i, t := range targets {
 			if v, err := g.SetView(t, -1, i*2, x, i*2+2); err != nil {
 				if err != ui.ErrUnknownView {
@@ -145,13 +140,8 @@ func scpToTargets(targets []string) {
 		return nil
 	})
 
-	go wait(&wg)
-
-	if err := g.MainLoop(); err != nil {
-		if err != ui.ErrQuit {
-			log.Fatal(err)
-		}
-	}
+	wait(&wg)
+	return ui.ErrQuit
 }
 
 func wait(wg *sync.WaitGroup) {
@@ -434,9 +424,12 @@ func prev(g *ui.Gui, v *ui.View) error {
 }
 
 func ssh(g *ui.Gui, v *ui.View) error {
-	_, cy := v.Cursor()
-	visibleNodes[cy].selected = true
-	return ui.ErrQuit
+	if *scp == "" {
+		_, cy := v.Cursor()
+		visibleNodes[cy].selected = true
+		return ui.ErrQuit
+	}
+	return scpToTargets(g, v)
 }
 
 func sel(g *ui.Gui, v *ui.View) error {
