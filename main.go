@@ -53,6 +53,9 @@ func main() {
 	} else {
 		getNodes()
 	}
+	if *filterStr != "" {
+		search(*filterStr)
+	}
 	targets := getTargets()
 	login(targets)
 }
