@@ -1,9 +1,0 @@
-package: github.com/cswank/ussh
-import:
-- package: github.com/jroimartin/gocui
-- package: github.com/marpaia/chef-golang
-- package: gopkg.in/alecthomas/kingpin.v2
-- package: github.com/atotto/clipboard
-- package: github.com/cswank/ussh
-  subpackages:
-  - vendor/github.com/atotto/clipboard

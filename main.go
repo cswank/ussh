@@ -53,9 +53,7 @@ func main() {
 	} else {
 		getNodes()
 	}
-	if *filterStr != "" {
-		search(*filterStr)
-	}
+	search(*filterStr)
 	targets := getTargets()
 	login(targets)
 }
@@ -70,6 +68,9 @@ func inBoth(h string, preds []string) bool {
 }
 
 func search(pred string) {
+	if *filterStr == "" {
+		return
+	}
 	_, my := g.Size()
 	my -= 5
 	pred = strings.TrimSpace(pred)
@@ -206,11 +207,9 @@ func layout(g *ui.Gui) error {
 		v.Highlight = false
 		v.Frame = false
 		v.Editable = true
-		if *filterStr != "" {
-			search(*filterStr)
-			fmt.Fprintln(v, *filterStr)
-			*filterStr = ""
-		}
+		search(*filterStr)
+		fmt.Fprintln(v, *filterStr)
+		*filterStr = ""
 	}
 
 	if v, err := g.SetView("info", width+10, 0, x, y); err != nil {
