@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	ui "github.com/jroimartin/gocui"
@@ -23,6 +24,7 @@ var (
 	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
 	username     string
+	msg          string
 	info         bool
 	current      string
 	hosts        []node
@@ -68,31 +70,6 @@ func main() {
 	login(targets)
 }
 
-func inBoth(h string, preds []string) bool {
-	for _, p := range preds {
-		if strings.Index(h, p) == -1 {
-			return false
-		}
-	}
-	return true
-}
-
-func search(pred string) {
-	my := len(hosts)
-	if g != nil {
-		_, my = g.Size()
-		my -= 5
-	}
-	pred = strings.TrimSpace(pred)
-	preds := strings.Split(pred, ",")
-	visibleNodes = []node{}
-	for i, n := range hosts {
-		if i < my && inBoth(n.node.Name, preds) {
-			visibleNodes = append(visibleNodes, n)
-		}
-	}
-}
-
 func getTargets() []string {
 	g = ui.NewGui()
 	if err := g.Init(); err != nil {
@@ -124,6 +101,31 @@ func getTargets() []string {
 		}
 	}
 	return out
+}
+
+func search(pred string) {
+	my := len(hosts)
+	if g != nil {
+		_, my = g.Size()
+		my -= 5
+	}
+	pred = strings.TrimSpace(pred)
+	preds := strings.Split(pred, ",")
+	visibleNodes = []node{}
+	for i, n := range hosts {
+		if i < my && inAll(n.node.Name, preds) {
+			visibleNodes = append(visibleNodes, n)
+		}
+	}
+}
+
+func inAll(h string, preds []string) bool {
+	for _, p := range preds {
+		if strings.Index(h, p) == -1 {
+			return false
+		}
+	}
+	return true
 }
 
 func getWidth() int {
@@ -174,12 +176,22 @@ func layout(g *ui.Gui) error {
 	size := len(visibleNodes)
 	width := getWidth()
 
-	if v, err := g.SetView("hosts-label", -1, -1, width+10, 1); err != nil {
+	if v, err := g.SetView("hosts-label", -1, -1, len("hosts"), 1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
 		v.Frame = false
-		fmt.Fprint(v, hostLabel)
+		fmt.Fprintln(v, hostLabel)
+	}
+
+	if v, err := g.SetView("msg", len("hosts")+1, -1, x, 1); err != nil {
+		if err != ui.ErrUnknownView {
+			return err
+		}
+		v.Highlight = false
+		v.Frame = false
+		v.Editable = false
+		colors["color3"](v, msg)
 	}
 
 	if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
@@ -222,7 +234,7 @@ func layout(g *ui.Gui) error {
 		*filterStr = ""
 	}
 
-	if v, err := g.SetView("info", width+10, 0, x, y); err != nil {
+	if v, err := g.SetView("info", width+10, 0, x, y-1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -284,7 +296,7 @@ func unhideAll() {
 }
 
 func acceptable(s string) bool {
-	return strings.Index(chars, s) > -1
+	return strings.Contains(chars, s)
 }
 
 type key struct {
@@ -336,6 +348,10 @@ func copyToClipboard(g *ui.Gui, v *ui.View) error {
 	cv, _ := g.View("hosts-cursor")
 	_, cur := cv.Cursor()
 	n := visibleNodes[cur]
+	mv, _ := g.View("msg")
+	mv.Clear()
+	fmt.Fprintf(mv, "copied %s to clipboard", n.node.Name)
+	go clearMsg()
 	return clipboard.WriteAll(n.node.Name)
 }
 
@@ -343,7 +359,21 @@ func copyToClipboardWithUsername(g *ui.Gui, v *ui.View) error {
 	cv, _ := g.View("hosts-cursor")
 	_, cur := cv.Cursor()
 	n := visibleNodes[cur]
-	return clipboard.WriteAll(fmt.Sprintf("%s@%s", username, n.node.Name))
+	s := fmt.Sprintf("%s@%s", username, n.node.Name)
+	mv, _ := g.View("msg")
+	mv.Clear()
+	fmt.Fprintf(mv, "copied %s to clipboard", s)
+	go clearMsg()
+	return clipboard.WriteAll(fmt.Sprintf("%s@%s", username, s))
+}
+
+func clearMsg() {
+	time.Sleep(2 * time.Second)
+	g.Execute(func(g *ui.Gui) error {
+		v, _ := g.View("msg")
+		v.Clear()
+		return nil
+	})
 }
 
 func filter(g *ui.Gui, v *ui.View) error {
