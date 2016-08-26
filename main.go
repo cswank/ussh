@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -24,7 +25,7 @@ var (
 	username     string
 	info         bool
 	current      string
-	nodes        []node
+	hosts        []node
 	visibleNodes []node
 	chars        = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.-,"
 	colors       map[string]func(io.Writer, string)
@@ -36,6 +37,12 @@ type node struct {
 	node     chef.Node
 	selected bool
 }
+
+type byHost []node
+
+func (b byHost) Len() int           { return len(b) }
+func (b byHost) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byHost) Less(i, j int) bool { return b[i].node.Name < b[j].node.Name }
 
 func init() {
 	username = os.Getenv("USSH_USER")
@@ -53,8 +60,11 @@ func main() {
 	} else {
 		getNodes()
 	}
-	search(*filterStr)
+	if *filterStr != "" {
+		search(*filterStr)
+	}
 	targets := getTargets()
+
 	login(targets)
 }
 
@@ -68,15 +78,15 @@ func inBoth(h string, preds []string) bool {
 }
 
 func search(pred string) {
-	if *filterStr == "" {
-		return
+	my := len(hosts)
+	if g != nil {
+		_, my = g.Size()
+		my -= 5
 	}
-	_, my := g.Size()
-	my -= 5
 	pred = strings.TrimSpace(pred)
 	preds := strings.Split(pred, ",")
 	visibleNodes = []node{}
-	for i, n := range nodes {
+	for i, n := range hosts {
 		if i < my && inBoth(n.node.Name, preds) {
 			visibleNodes = append(visibleNodes, n)
 		}
@@ -118,7 +128,7 @@ func getTargets() []string {
 
 func getWidth() int {
 	var w int
-	for _, n := range nodes {
+	for _, n := range hosts {
 		if len(n.node.Name) > w {
 			w = len(n.node.Name)
 		}
@@ -269,8 +279,8 @@ func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
 }
 
 func unhideAll() {
-	visibleNodes = make([]node, len(nodes))
-	copy(visibleNodes, nodes)
+	visibleNodes = make([]node, len(hosts))
+	copy(visibleNodes, hosts)
 }
 
 func acceptable(s string) bool {
@@ -492,11 +502,11 @@ func getFakeNodes() {
 	f := []string{".com", ".net"}
 	e := []string{"prod", "staging"}
 	c := []string{"server1", "server2", "server3", "server4", "server5"}
-	nodes = make([]node, len(c))
+	hosts = make([]node, len(c))
 	visibleNodes = make([]node, len(c))
 	for i, x := range c {
 		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", x, f[i%2]), Environment: e[i%2]}}
-		nodes[i] = n
+		hosts[i] = n
 		visibleNodes[i] = n
 	}
 }
@@ -526,9 +536,11 @@ func getNodes() {
 	for _, x := range resp.Rows {
 		var n chef.Node
 		json.Unmarshal(x, &n)
-		nodes = append(nodes, node{node: n})
+		hosts = append(hosts, node{node: n})
 		visibleNodes = append(visibleNodes, node{node: n})
 	}
+	sort.Sort(byHost(hosts))
+	sort.Sort(byHost(visibleNodes))
 }
 
 func setupColors() {
