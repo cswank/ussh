@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,12 @@ import (
 	ui "github.com/jroimartin/gocui"
 	chef "github.com/marpaia/chef-golang"
 	"gopkg.in/alecthomas/kingpin.v2"
+)
+
+const (
+	forward  = iota
+	backward = iota
+	elipsis  = "..."
 )
 
 var (
@@ -33,11 +40,14 @@ var (
 	colors       map[string]func(io.Writer, string)
 	hostLabel    string
 	filterLabel  string
+	window       int
+	f            *os.File
 )
 
 type node struct {
 	node     chef.Node
 	selected bool
+	index    int
 }
 
 type byHost []node
@@ -47,10 +57,21 @@ func (b byHost) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byHost) Less(i, j int) bool { return b[i].node.Name < b[j].node.Name }
 
 func init() {
+	f, _ = os.Create("/tmp/ussh.log")
+	log.SetOutput(f)
 	username = os.Getenv("USSH_USER")
 	if username == "" {
 		fmt.Println("please set the $USSH_USER env var to your ldap username.")
 		os.Exit(1)
+	}
+
+	window = 20
+	w := os.Getenv("USSH_WINDOW")
+	if w != "" {
+		x, err := strconv.ParseInt(w, 10, 32)
+		if err == nil {
+			window = int(x)
+		}
 	}
 	setupColors()
 }
@@ -67,6 +88,7 @@ func main() {
 	}
 	targets := getTargets()
 
+	f.Close()
 	login(targets)
 }
 
@@ -113,7 +135,7 @@ func search(pred string) {
 	preds := strings.Split(pred, ",")
 	visibleNodes = []node{}
 	for i, n := range hosts {
-		if i < my && inAll(n.node.Name, preds) {
+		if i < my && i < window && inAll(n.node.Name, preds) {
 			visibleNodes = append(visibleNodes, n)
 		}
 	}
@@ -202,7 +224,7 @@ func layout(g *ui.Gui) error {
 		v.Frame = false
 	}
 
-	if v, err := g.SetView("hosts", 6, 0, width+8, size+1); err != nil {
+	if v, err := g.SetView("hosts", 6, 0, width+11, size+1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -210,7 +232,7 @@ func layout(g *ui.Gui) error {
 		printNodes()
 	}
 
-	if v, err := g.SetView("filter-label", -1, size, width+10, size+2); err != nil {
+	if v, err := g.SetView("filter-label", -1, size, width+13, size+2); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -234,7 +256,7 @@ func layout(g *ui.Gui) error {
 		*filterStr = ""
 	}
 
-	if v, err := g.SetView("info", width+10, 0, x, y-1); err != nil {
+	if v, err := g.SetView("info", width+13, 0, x, y-1); err != nil {
 		if err != ui.ErrUnknownView {
 			return err
 		}
@@ -254,14 +276,28 @@ func printNodes() {
 	hv.Clear()
 	_, cur := cv.Cursor()
 	for i, n := range visibleNodes {
+		prefix, postfix := getElipsis(i)
 		f := colors["color1"]
 		if n.selected && i == cur {
 			f = colors["color3"]
 		} else if n.selected || i == cur {
 			f = colors["color2"]
 		}
-		f(hv, n.node.Name)
+		f(hv, fmt.Sprintf("%s%s%s", prefix, n.node.Name, postfix))
 	}
+}
+
+func getElipsis(i int) (string, string) {
+	if len(visibleNodes) < window {
+		return "", ""
+	}
+	if i == 0 && visibleNodes[0].index > 0 {
+		return elipsis, ""
+	}
+	if i == window-1 && (visibleNodes[window-1].index != hosts[len(hosts)-1].index) {
+		return "", elipsis
+	}
+	return "", ""
 }
 
 func edit(v *ui.View, key ui.Key, ch rune, mod ui.Modifier) {
@@ -402,9 +438,32 @@ func sshAll(g *ui.Gui, v *ui.View) error {
 	return ui.ErrQuit
 }
 
+func scroll(dir int) {
+	if len(visibleNodes) < window {
+		return
+	}
+	if dir == forward {
+		if visibleNodes[window-1].index == len(hosts)-1 {
+			return
+		}
+		start := visibleNodes[0].index + 1
+		end := start + window
+		visibleNodes = hosts[start:end]
+	} else {
+		if visibleNodes[0].index == 0 {
+			return
+		}
+		start := visibleNodes[0].index - 1
+		end := start + window
+		visibleNodes = hosts[start:end]
+	}
+	printNodes()
+}
+
 func next(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
 	if cy+1 >= len(visibleNodes) {
+		scroll(forward)
 		return nil
 	}
 	err := v.SetCursor(cx, cy+1)
@@ -417,6 +476,7 @@ func next(g *ui.Gui, v *ui.View) error {
 func prev(g *ui.Gui, v *ui.View) error {
 	cx, cy := v.Cursor()
 	if cy-1 < 0 {
+		scroll(backward)
 		return nil
 	}
 	err := v.SetCursor(cx, cy-1)
@@ -529,15 +589,15 @@ func login(targets []string) {
 }
 
 func getFakeNodes() {
-	f := []string{".com", ".net"}
+	f := []string{"com", "net"}
 	e := []string{"prod", "staging"}
-	c := []string{"server1", "server2", "server3", "server4", "server5"}
-	hosts = make([]node, len(c))
-	visibleNodes = make([]node, len(c))
-	for i, x := range c {
-		n := node{node: chef.Node{Name: fmt.Sprintf("%s%s", x, f[i%2]), Environment: e[i%2]}}
+	hosts = make([]node, 30)
+	for i := 0; i < 30; i++ {
+		n := node{node: chef.Node{Name: fmt.Sprintf("server%d.%s", i, f[i%2]), Environment: e[i%2]}, index: i}
 		hosts[i] = n
-		visibleNodes[i] = n
+		if i < window {
+			visibleNodes = append(visibleNodes, n)
+		}
 	}
 }
 
@@ -563,11 +623,14 @@ func getNodes() {
 		os.Exit(0)
 	}
 
-	for _, x := range resp.Rows {
-		var n chef.Node
-		json.Unmarshal(x, &n)
-		hosts = append(hosts, node{node: n})
-		visibleNodes = append(visibleNodes, node{node: n})
+	for i, x := range resp.Rows {
+		var cn chef.Node
+		json.Unmarshal(x, &cn)
+		n := node{node: cn, index: i}
+		hosts = append(hosts, n)
+		if i < window {
+			visibleNodes = append(visibleNodes, n)
+		}
 	}
 	sort.Sort(byHost(hosts))
 	sort.Sort(byHost(visibleNodes))

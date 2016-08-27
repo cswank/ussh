@@ -36,6 +36,11 @@ that are used by setting, for example:
 
 The choices are black, red, green, yellow, blue, magenta,
 cyan, and white.
+
+By default, 20 results are printed to the screen (you can scroll
+to all of the results).  If you want to see more by default:
+
+    export USSH_WINDOW=<some int>.
   
 Then type, for example
 
