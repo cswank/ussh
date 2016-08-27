@@ -629,10 +629,14 @@ func getNodes() {
 		n := node{node: cn, index: i}
 		hosts = append(hosts, n)
 	}
+
 	sort.Sort(byHost(hosts))
-	end := window - 1
+	for i, _ := range hosts {
+		hosts[i].index = i
+	}
+	end := window
 	if len(hosts) < window {
-		end = len(hosts) - 1
+		end = len(hosts)
 	}
 	visibleNodes = hosts[0:end]
 }
