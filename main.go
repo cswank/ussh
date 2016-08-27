@@ -628,12 +628,13 @@ func getNodes() {
 		json.Unmarshal(x, &cn)
 		n := node{node: cn, index: i}
 		hosts = append(hosts, n)
-		if i < window {
-			visibleNodes = append(visibleNodes, n)
-		}
 	}
 	sort.Sort(byHost(hosts))
-	sort.Sort(byHost(visibleNodes))
+	end := window - 1
+	if len(hosts) < window {
+		end = len(hosts) - 1
+	}
+	visibleNodes = hosts[0:end]
 }
 
 func setupColors() {
