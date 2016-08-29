@@ -400,7 +400,7 @@ func copyToClipboardWithUsername(g *ui.Gui, v *ui.View) error {
 	mv.Clear()
 	fmt.Fprintf(mv, "copied %s to clipboard", s)
 	go clearMsg()
-	return clipboard.WriteAll(fmt.Sprintf("%s@%s", username, s))
+	return clipboard.WriteAll(s)
 }
 
 func clearMsg() {
