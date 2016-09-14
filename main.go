@@ -31,7 +31,6 @@ var (
 	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
 	username     string
-	msg          string
 	info         bool
 	current      string
 	hosts        []node
@@ -42,6 +41,7 @@ var (
 	filterLabel  string
 	window       int
 	f            *os.File
+	msg          chan string
 )
 
 type node struct {
@@ -57,6 +57,7 @@ func (b byHost) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byHost) Less(i, j int) bool { return b[i].node.Name < b[j].node.Name }
 
 func init() {
+	msg = make(chan string)
 	f, _ = os.Create("/tmp/ussh.log")
 	log.SetOutput(f)
 	username = os.Getenv("USSH_USER")
@@ -77,6 +78,8 @@ func init() {
 }
 
 func main() {
+	go message()
+
 	kingpin.Parse()
 	if *fake {
 		getFakeNodes()
@@ -219,7 +222,7 @@ func layout(g *ui.Gui) error {
 		v.Highlight = false
 		v.Frame = false
 		v.Editable = false
-		colors["color3"](v, msg)
+		colors["color3"](v, "")
 	}
 
 	if v, err := g.SetView("hosts-cursor", 4, 0, 6, size+1); err != nil {
@@ -390,10 +393,7 @@ func copyToClipboard(g *ui.Gui, v *ui.View) error {
 	cv, _ := g.View("hosts-cursor")
 	_, cur := cv.Cursor()
 	n := visibleNodes[cur]
-	mv, _ := g.View("msg")
-	mv.Clear()
-	fmt.Fprintf(mv, "copied %s to clipboard", n.node.Name)
-	go clearMsg()
+	msg <- fmt.Sprintf("copied %s to clipboard", n.node.Name)
 	return clipboard.WriteAll(n.node.Name)
 }
 
@@ -402,18 +402,29 @@ func copyToClipboardWithUsername(g *ui.Gui, v *ui.View) error {
 	_, cur := cv.Cursor()
 	n := visibleNodes[cur]
 	s := fmt.Sprintf("%s@%s", username, n.node.Name)
-	mv, _ := g.View("msg")
-	mv.Clear()
-	fmt.Fprintf(mv, "copied %s to clipboard", s)
-	go clearMsg()
+	msg <- fmt.Sprintf("copied %s to clipboard", s)
 	return clipboard.WriteAll(s)
 }
 
-func clearMsg() {
-	time.Sleep(2 * time.Second)
+func message() {
+	dur := time.Second * 2
+	for {
+		select {
+		case m := <-msg:
+			dur = time.Second * 2
+			writeMsg(m)
+		case <-time.After(dur):
+			dur = time.Second * 1000
+			writeMsg("")
+		}
+	}
+}
+
+func writeMsg(msg string) {
 	g.Execute(func(g *ui.Gui) error {
 		v, _ := g.View("msg")
 		v.Clear()
+		fmt.Fprint(v, msg)
 		return nil
 	})
 }
