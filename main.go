@@ -133,18 +133,18 @@ func search(pred string) {
 	}
 	pred = strings.TrimSpace(pred)
 	preds := strings.Split(pred, ",")
+
+	var i int
 	visibleNodes = []node{}
 	for _, n := range hosts {
-		if inAll(n.node.Name, preds) {
+		if i < window && inAll(n.node.Name, preds) {
 			visibleNodes = append(visibleNodes, n)
+			i++
+		}
+		if i >= window {
+			break
 		}
 	}
-
-	end := window
-	if end >= len(visibleNodes) {
-		end = len(visibleNodes)
-	}
-	visibleNodes = visibleNodes[0:end]
 }
 
 func inAll(h string, preds []string) bool {
