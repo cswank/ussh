@@ -78,19 +78,18 @@ func init() {
 }
 
 func main() {
-	go message()
-
 	kingpin.Parse()
 	if *fake {
 		getFakeNodes()
 	} else {
 		getNodes()
 	}
+
 	if *filterStr != "" {
 		search(*filterStr)
 	}
-	targets := getTargets()
 
+	targets := getTargets()
 	f.Close()
 	login(targets)
 }
@@ -98,8 +97,10 @@ func main() {
 func getTargets() []string {
 	g = ui.NewGui()
 	if err := g.Init(); err != nil {
-		log.Panicln(err)
+		log.Fatal("could not init", err)
 	}
+
+	go message()
 
 	current = "hosts-cursor"
 
@@ -619,10 +620,12 @@ func getFakeNodes() {
 }
 
 func getNodes() {
+
 	c, err := chef.Connect()
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
+
 	c.SSLNoVerify = true
 
 	q := fmt.Sprintf("hostname:*%s*", *query)
@@ -656,6 +659,7 @@ func getNodes() {
 		end = len(hosts)
 	}
 	visibleNodes = hosts[0:end]
+
 }
 
 func setupColors() {
