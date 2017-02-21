@@ -30,6 +30,7 @@ var (
 	filterStr    = kingpin.Flag("filter", "filter string").Short('f').String()
 	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
+	scp          = kingpin.Flag("scp", "file to scp to targets").Short('s').String()
 	username     string
 	info         bool
 	current      string
@@ -585,7 +586,7 @@ func printCPU(v *ui.View, n chef.Node) {
 }
 
 func login(targets []string) {
-	if len(targets) == 1 && targets[0] != "" {
+	if len(targets) == 1 && targets[0] != "" && len(*scp) == 0 {
 		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, targets[0]))
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -593,6 +594,17 @@ func login(targets []string) {
 		err := cmd.Run()
 		if err != nil {
 			log.Fatal("couldn't ssh", err)
+		}
+	} else if len(targets) >= 1 && targets[0] != "" && len(*scp) > 0 {
+		for _, x := range targets {
+			cmd := exec.Command("scp", *scp, fmt.Sprintf("%s@%s:", username, x))
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				log.Fatal("couldn't scp", err)
+			}
 		}
 	} else if len(targets) > 1 {
 		for i, x := range targets {
