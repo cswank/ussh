@@ -541,6 +541,7 @@ func printInfo(v *ui.View) {
 		_, cur := cv.Cursor()
 		n := visibleNodes[cur]
 		fmt.Fprintf(v, "Name: %s\n", n.node.Name)
+		fmt.Fprintf(v, "Roles: %v\n", n.node.Info.Roles)
 		fmt.Fprintf(v, "Environment: %s\n", n.node.Environment)
 		fmt.Fprintf(v, "IP: %s\n", n.node.Info.IPAddress)
 		fmt.Fprintf(v, "MAC: %s\n", n.node.Info.MACAddress)
