@@ -26,8 +26,8 @@ const (
 
 var (
 	g            *ui.Gui
-	query        = kingpin.Arg("query", "knife search query").String()
-	host         = kingpin.Flag("host", "knife search: 'hostname:<host>").Short('h').String()
+	query        = kingpin.Arg("query", "turns the arg into a knife search of 'hostname:<ARG>'").String()
+	knife        = kingpin.Flag("knife", "uses the passed in value as a raw knife search").Short('k').String()
 	filterStr    = kingpin.Flag("filter", "filter string").Short('f').String()
 	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
@@ -643,10 +643,10 @@ func getNodes() {
 	c.SSLNoVerify = true
 
 	var q string
-	if *query != "" {
-		q = *query
+	if *knife != "" {
+		q = *knife
 	} else {
-		q = fmt.Sprintf("hostname:*%s*", *host)
+		q = fmt.Sprintf("hostname:*%s*", *query)
 		if *role != "" {
 			q = fmt.Sprintf("%s AND role:*%s*", q, *role)
 		}
