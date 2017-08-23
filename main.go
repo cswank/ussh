@@ -26,7 +26,8 @@ const (
 
 var (
 	g            *ui.Gui
-	query        = kingpin.Arg("query", "search string").String()
+	query        = kingpin.Arg("query", "knife search query").String()
+	host         = kingpin.Flag("host", "knife search: 'hostname:<host>").Short('h').String()
 	filterStr    = kingpin.Flag("filter", "filter string").Short('f').String()
 	fake         = kingpin.Flag("mock", "fake nodes").Short('m').Bool()
 	role         = kingpin.Flag("role", "chef role").Short('r').String()
@@ -641,9 +642,14 @@ func getNodes() {
 
 	c.SSLNoVerify = true
 
-	q := fmt.Sprintf("hostname:*%s*", *query)
-	if *role != "" {
-		q = fmt.Sprintf("%s AND role:*%s*", q, *role)
+	var q string
+	if *query != "" {
+		q = *query
+	} else {
+		q = fmt.Sprintf("hostname:*%s*", *host)
+		if *role != "" {
+			q = fmt.Sprintf("%s AND role:*%s*", q, *role)
+		}
 	}
 
 	resp, err := c.Search("node", q)
