@@ -396,8 +396,24 @@ func copyToClipboard(g *ui.Gui, v *ui.View) error {
 	cv, _ := g.View("hosts-cursor")
 	_, cur := cv.Cursor()
 	n := visibleNodes[cur]
-	msg <- fmt.Sprintf("copied %s to clipboard", n.node.Name)
-	return clipboard.WriteAll(n.node.Name)
+
+	var selected []string
+	for _, n := range visibleNodes {
+		if n.selected {
+			selected = append(selected, n.node.Name)
+		}
+	}
+
+	var s string
+	if len(selected) > 0 {
+		selected = append(selected, n.node.Name)
+		s = strings.Join(selected, ",")
+	} else {
+		s = n.node.Name
+	}
+
+	msg <- fmt.Sprintf("copied %s to clipboard", s)
+	return clipboard.WriteAll(s)
 }
 
 func copyToClipboardWithUsername(g *ui.Gui, v *ui.View) error {
